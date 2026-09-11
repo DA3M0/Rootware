@@ -1,0 +1,4 @@
+/target
+/iso
+/rootware.iso
+*.o
