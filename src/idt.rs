@@ -68,6 +68,9 @@ pub fn init() {
         // 设置双重故障（向量 8）
         IDT[8] = IdtEntry::new(double_fault_handler as *const () as u64, 0x08, 0x8E);
 
+        // 设置时钟中断（向量 32）
+        IDT[32] = IdtEntry::new(timer_interrupt_handler as *const () as u64, 0x08, 0x8E);
+
         // 加载 IDT
         let idt_ptr = IdtPointer {
             size: (mem::size_of::<[IdtEntry; 256]>() - 1) as u16,
@@ -113,4 +116,9 @@ extern "C" fn double_fault_handler() {
             core::arch::asm!("hlt");
         }
     }
+}
+/// 时钟中断处理
+extern "C" fn timer_interrupt_handler() {
+    crate::timer::tick();
+    crate::timer::send_eoi();
 }
