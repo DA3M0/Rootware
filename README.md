@@ -1,25 +1,54 @@
+cat > README.md << 'EOF'
 # Rootware
 
-A microkernel operating system written in Rust.
+Rootware is a microkernel operating system written from scratch in Rust.
 
-## Status
+## Why
 
-Alpha 1 — Minimal bootable kernel with serial output "Hello from Rootware!"
-
-## What is this
-
-The first runnable prototype of the Rootware root system (microkernel).
-It does exactly three things: boot, print, and prove the design works.
+I'm 15, and I've been learning Rust for about a week. I wanted to learn by building a real operating system. Most tutorials either assume prior knowledge, use nightly, or rely on third-party libraries. So I decided to start from zero and write one myself.
 
 ## Tech Stack
 
-- Rust (stable, 2024 Edition)
-- No third-party libraries
-- GRUB2 + Multiboot2
-- x86_64-unknown-none
+| Item | Choice |
+| :--- | :--- |
+| Language | Rust (stable, 2024 Edition) |
+| Dependencies | Zero third-party libraries |
+| Bootloader | GRUB2 + Multiboot2 |
+| Target | x86_64-unknown-none |
+| Kernel License | Apache 2.0 |
+
+## Architecture
+
+Rootware has three layers:
+
+### Kernel (Apache 2.0)
+
+- Scheduler
+- Memory management
+- IPC + security layer
+- Interrupt/exception handling
+- Architecture abstraction (x86_64)
+
+Around 15,000–20,000 lines, zero third-party dependencies. The security layer lives inside IPC — every message passes a permission check.
+
+### Userspace (Mixed Licenses)
+
+Largely reuses existing components:
+
+- Filesystem: ext4
+- Drivers: Linux drivers (via rkm)
+- Shell: Rash / Brush
+- Coreutils: uutils
+- Python: RustPython
+- Editor: Helix
+
+Only the framework and system manager are custom, around 3,000–5,000 lines.
 
 ## Build & Run
 
-```bash
-cargo build --release
-./build.sh
+### Dependencies
+
+- Rust stable
+- QEMU
+- GRUB2 tools (`grub2-mkrescue`)
+- NASM
