@@ -68,6 +68,19 @@ pub fn _print(args: core::fmt::Arguments) {
     }
 }
 
+pub fn write_byte(byte: u8) {
+    unsafe {
+        (*&raw mut SERIAL).write_byte(byte);
+    }
+}
+
+pub fn write_str(s: &str) {
+    use core::fmt::Write;
+    unsafe {
+        let _ = (*&raw mut SERIAL).write_str(s);
+    }
+}
+
 #[macro_export]
 macro_rules! serial_print {
     ($($arg:tt)*) => {

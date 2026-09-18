@@ -5,10 +5,11 @@ fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let boot_obj = format!("{}/boot.o", out_dir);
 
-    Command::new("nasm")
+    let status = Command::new("nasm")
         .args(["-f", "elf64", "src/boot.asm", "-o", &boot_obj])
         .status()
         .expect("nasm failed");
+    assert!(status.success(), "nasm returned {status}");
 
     println!("cargo:rustc-link-arg={}", boot_obj);
     println!("cargo:rustc-link-arg=-Tlinker.ld");

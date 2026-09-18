@@ -3,36 +3,32 @@
 
 mod gdt;
 mod idt;
+mod memory;
 mod panic;
 mod serial;
 mod timer;
 
 #[unsafe(no_mangle)]
-pub extern "C" fn _start() -> ! {
+pub extern "C" fn rust_start(mb_info: u64) -> ! {
     serial::init();
-    serial_println!("Before GDT init");
-    gdt::init();
-    serial_println!("Before IDT init");
-    idt::init();
-    serial_println!("Before timer init");
-    timer::init();
-    unsafe {
-        core::arch::asm!("sti");
+
+    // 只取低 32 位
+    let mb_info_low = mb_info & 0xFFFFFFFF;
+
+    serial::write_str("mb_info low: 0x");
+    for i in (0..8).rev() {
+        let nibble = ((mb_info_low >> (i * 4)) & 0xF) as u8;
+        let c = if nibble < 10 {
+            b'0' + nibble
+        } else {
+            b'a' + nibble - 10
+        };
+        serial::write_byte(c);
     }
-    serial_println!("Interrupts enabled");
-    serial_println!("After timer init");
-    serial_println!("After IDT init");
-    serial_println!("After GDT init");
-    serial_println!("Rootware Microkernel");
-    serial_println!("==============");
-    serial_println!();
-    serial_println!("Version: Alpha 3 ");
-    serial_println!("License: Apache 2.0");
-    serial_println!();
-    serial_println!("Hello from Rootware!");
-    serial_println!("GDT initialized");
-    serial_println!("IDT initialized");
-    serial_println!("Timer initialized");
+    serial::write_str("\n");
+
+    memory::init(mb_info_low);
+
     loop {
         unsafe {
             core::arch::asm!("hlt");
