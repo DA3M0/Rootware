@@ -4,6 +4,22 @@
 //! 每个描述符 16 字节，指向一个处理函数。
 
 use core::mem;
+use core::arch::global_asm;
+
+global_asm!(
+    ".global rootware_syscall_entry",
+    "rootware_syscall_entry:",
+    "push rcx",
+    "push r11",
+    "call rootware_syscall_handler",
+    "pop r11",
+    "pop rcx",
+    "sysretq",
+);
+
+unsafe extern "C" {
+    fn rootware_syscall_entry();
+}
 
 /// IDT 中的一个描述符（16 字节）
 #[repr(C, packed)]
@@ -59,6 +75,38 @@ static mut IDT: [IdtEntry; 256] = [IdtEntry::missing(); 256];
 /// 初始化 IDT
 pub fn init() {
     unsafe {
+        let lstar = rootware_syscall_entry as *const () as u64;
+        core::arch::asm!(
+            "wrmsr",
+            in("ecx") 0xc0000082u32,
+            in("eax") lstar as u32,
+            in("edx") (lstar >> 32) as u32,
+            options(nostack, preserves_flags)
+        );
+        core::arch::asm!(
+            "wrmsr",
+            in("ecx") 0xc0000081u32,
+            in("eax") 0x0008u32,
+            in("edx") 0x000b_0008u32,
+            options(nostack, preserves_flags)
+        );
+        let mut efer_low: u32;
+        let mut efer_high: u32;
+        core::arch::asm!(
+            "rdmsr",
+            in("ecx") 0xc0000080u32,
+            out("eax") efer_low,
+            out("edx") efer_high,
+            options(nostack)
+        );
+        efer_low |= 1;
+        core::arch::asm!(
+            "wrmsr",
+            in("ecx") 0xc0000080u32,
+            in("eax") efer_low,
+            in("edx") efer_high,
+            options(nostack, preserves_flags)
+        );
         // 设置除零异常（向量 0）
         IDT[0] = IdtEntry::new(divide_by_zero_handler as *const () as u64, 0x08, 0x8E);
 
@@ -70,6 +118,7 @@ pub fn init() {
 
         // 设置时钟中断（向量 32）
         IDT[32] = IdtEntry::new(timer_interrupt_handler as *const () as u64, 0x08, 0x8E);
+        IDT[128] = IdtEntry::new(rootware_syscall_entry as *const () as u64, 0x08, 0xEE);
 
         // 加载 IDT
         let idt_ptr = IdtPointer {
@@ -82,6 +131,11 @@ pub fn init() {
             in(reg) &idt_ptr,
             options(nostack)
         );
+    }
+
+    #[unsafe(no_mangle)]
+    extern "C" fn rootware_syscall_handler() {
+        crate::serial_println!("[SYSCALL] userspace requested kernel service");
     }
 }
 

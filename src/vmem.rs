@@ -88,7 +88,7 @@ pub fn init() {
         // Keep all kernel code, stack, Multiboot data, and the test physical
         // page identity-mapped before replacing GRUB's page tables.
         (*&raw mut PML4).entries[0] =
-            table_address(&raw const PDP) | PRESENT | WRITABLE;
+            table_address(&raw const PDP) | PRESENT | WRITABLE | USER;
         (*&raw mut PDP).entries[0] =
             table_address(&raw const PD[0]) | PRESENT | WRITABLE;
         (*&raw mut PD[0]).entries[0] = PRESENT | WRITABLE | HUGE_PAGE;
@@ -97,9 +97,9 @@ pub fn init() {
 
         // 0x4000_0000 uses PDP index 1 and PD index 0.
         (*&raw mut PDP).entries[1] =
-            table_address(&raw const PD[1]) | PRESENT | WRITABLE;
+            table_address(&raw const PD[1]) | PRESENT | WRITABLE | USER;
         (*&raw mut PD[1]).entries[0] =
-            table_address(&raw const PT) | PRESENT | WRITABLE;
+            table_address(&raw const PT) | PRESENT | WRITABLE | USER;
 
         load_cr3();
     }

@@ -61,7 +61,7 @@ _start:
 
 bits 64
 long_mode_start:
-    mov ax, 0x10
+    mov ax, 0x20
     mov ds, ax
     mov es, ax
     mov ss, ax
@@ -93,6 +93,8 @@ align 8
 gdt64:
     dq 0
     dq 0x00af9a000000ffff
+    dq 0x00aff2000000ffff
+    dq 0x00affa000000ffff
     dq 0x00af92000000ffff
 .pointer:
     dw .pointer - gdt64 - 1

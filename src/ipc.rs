@@ -55,9 +55,11 @@ pub fn recv(receiver: u16) -> Option<Message> {
 }
 
 pub fn init() {
-    let message = Message { sender: 1, receiver: 2, message_type: 1, payload: *b"hello from A\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0" };
-    let _ = message;
-    crate::serial_println!("[IPC] message sent: A -> B");
-    crate::serial_println!("[IPC] permission denied");
     crate::serial_println!("[IPC] audit: permission checks enabled");
+}
+
+pub fn test_message() -> Message {
+    let mut payload = [0; PAYLOAD_SIZE];
+    payload[..12].copy_from_slice(b"hello from A");
+    Message { sender: 1, receiver: 2, message_type: 1, payload }
 }

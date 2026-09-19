@@ -34,9 +34,9 @@ pub extern "C" fn rust_start(mb_info: u64) -> ! {
     memory::init(mb_info_low);
     vmem::init();
     vmem::test();
-    scheduler::init();
     ipc::init();
-    service::init();
+    idt::init();
+    scheduler::init();
 
     loop {
         unsafe {

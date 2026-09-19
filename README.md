@@ -62,6 +62,11 @@ Only the framework and system manager are custom, around 3,000–5,000 lines.
 - [x] Beta: kernel module integration and first service handoff
 - [x] Functional Beta VMEM milestone: long-mode entry, CR3 installation,
   virtual write and physical read verification in QEMU
+- [x] Functional scheduler milestone: assembly context switching and
+  alternating kernel tasks in QEMU
+- [x] Functional IPC milestone: task A sends and task B receives messages
+- [x] Functional userspace milestone: Ring 3 service enters through `sysretq`
+  and invokes a kernel syscall
 
 The kernel ABI is represented by `#[repr(C)]` structures in the memory,
 scheduler, and IPC modules. The current scheduler and IPC implementations
