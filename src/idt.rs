@@ -11,6 +11,9 @@ global_asm!(
     "rootware_syscall_entry:",
     "push rcx",
     "push r11",
+    "mov rdx, rsi",
+    "mov rsi, rdi",
+    "mov rdi, rax",
     "call rootware_syscall_handler",
     "pop r11",
     "pop rcx",
@@ -134,8 +137,57 @@ pub fn init() {
     }
 
     #[unsafe(no_mangle)]
-    extern "C" fn rootware_syscall_handler() {
-        crate::serial_println!("[SYSCALL] userspace requested kernel service");
+    extern "C" fn rootware_syscall_handler(number: u64, first: u64, second: u64) -> i64 {
+        const IPC_SEND: u64 = 1;
+        const IPC_RECEIVE: u64 = 2;
+        const IPC_REPLY: u64 = 3;
+
+        match number {
+            IPC_SEND => {
+                if first == 0 {
+                    return -1;
+                }
+                // User pages are mapped by the service loader before entering
+                // Ring 3. The syscall ABI uses a fixed, Copy message layout.
+                let message = unsafe { core::ptr::read(first as *const crate::ipc::Message) };
+                crate::ipc::send(message).map_or(-7, |_| 0)
+            }
+            IPC_RECEIVE => {
+                if second == 0 {
+                    return -1;
+                }
+                match crate::ipc::recv(first as u16) {
+                    Some(message) => {
+                        unsafe {
+                            core::ptr::write(second as *mut crate::ipc::Message, message);
+                        }
+                        0
+                    }
+                    None => -4,
+                }
+            }
+            IPC_REPLY => {
+                if first == 0 || second == 0 {
+                    return -1;
+                }
+                let request = unsafe { core::ptr::read(first as *const crate::ipc::Message) };
+                if request.receiver == 0 || request.sender == 0 {
+                    return -1;
+                }
+                let payload = unsafe {
+                    core::ptr::read(second as *const [u8; crate::ipc::PAYLOAD_SIZE])
+                };
+                let response = crate::ipc::Message {
+                    sender: request.receiver,
+                    receiver: request.sender,
+                    message_type: request.message_type,
+                    capability: request.capability,
+                    payload,
+                };
+                crate::ipc::send(response).map_or(-7, |_| 0)
+            }
+            _ => -6,
+        }
     }
 }
 
