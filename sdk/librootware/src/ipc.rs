@@ -1,5 +1,7 @@
 use crate::capability::Capability;
-use crate::error::{Error, ErrorCode, Result};
+use crate::error::Result;
+#[cfg(feature = "std")]
+use crate::error::{Error, ErrorCode};
 
 pub const PAYLOAD_SIZE: usize = 32;
 pub const BROADCAST_RECEIVER: u16 = u16::MAX;

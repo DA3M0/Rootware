@@ -51,15 +51,17 @@ fn status_result(status: i64) -> Result<()> {
 #[cfg(all(target_os = "none", target_arch = "x86_64"))]
 unsafe fn invoke(number: u64, first: u64, second: u64) -> i64 {
     let result: i64;
-    core::arch::asm!(
-        "syscall",
-        inlateout("rax") number as i64 => result,
-        in("rdi") first,
-        in("rsi") second,
-        lateout("rcx") _,
-        lateout("r11") _,
-        options(nostack)
-    );
+    unsafe {
+        core::arch::asm!(
+            "syscall",
+            inlateout("rax") number as i64 => result,
+            in("rdi") first,
+            in("rsi") second,
+            lateout("rcx") _,
+            lateout("r11") _,
+            options(nostack)
+        );
+    }
     result
 }
 

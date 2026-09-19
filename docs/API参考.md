@@ -14,7 +14,8 @@
 - `ipc::BROADCAST_RECEIVER`：广播消息的特殊接收方；内核按路由表复制到多个目标队列。
 - `capability::Capability`：`#[repr(C)]` 的 32 位能力令牌；`CapabilityProvider` 请求和检查能力，模拟器提供内存实现。
 - IPC 发送要求消息携带的能力令牌同时被发送方持有，并匹配权限规则中的所需能力；无能力或无效令牌会被拒绝。
-- `log::log`、`info!`、`warn!`：统一日志接口。
+- `log::log`、`log::log_args`、`info!`、`warn!`：统一日志接口；宏直接传递
+  `format_args!`，不在 `no_std` 下分配字符串。
 - `ErrorCode` / `Error`：统一错误码，包含权限、队列、参数和传输错误。
 - `audit::AuditEntry`：固定格式的 IPC 审计记录，包含 tick 时间、发送方、接收方、消息类型、能力和结果；日志使用固定容量环形存储并支持按发送方查询。
 - Beta 7 ABI 已冻结：版本 `3`，`Message` 为 `#[repr(C)]`、44 字节；标准消息类型、能力令牌和广播接收方常量保持稳定。

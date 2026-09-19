@@ -1,4 +1,6 @@
-use crate::error::{Error, ErrorCode, Result};
+use crate::error::Result;
+#[cfg(feature = "std")]
+use crate::error::{Error, ErrorCode};
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
