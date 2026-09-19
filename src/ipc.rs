@@ -1,5 +1,6 @@
-//! Beta 2 IPC: fixed-size queues with configurable permission rules.
+//! Beta 3 IPC: fixed-size queues with configurable rules and capabilities.
 
+use crate::capability::{self, Capability};
 pub const PAYLOAD_SIZE: usize = 32;
 pub const MSG_CAPACITY: usize = 8;
 pub const MAX_PERMISSION_RULES: usize = 8;
@@ -10,6 +11,7 @@ pub struct Message {
     pub sender: u16,
     pub receiver: u16,
     pub message_type: u16,
+    pub capability: Capability,
     pub payload: [u8; PAYLOAD_SIZE],
 }
 
@@ -18,6 +20,7 @@ pub struct Message {
 pub struct PermissionRule {
     pub sender: u16,
     pub receiver: u16,
+    pub capability: Capability,
 }
 
 #[repr(C)]
@@ -33,6 +36,7 @@ impl PermissionConfig {
             rules: [PermissionRule {
                 sender: 0,
                 receiver: 0,
+                capability: Capability { id: 0 },
             }; MAX_PERMISSION_RULES],
             count: 0,
         }
@@ -49,17 +53,20 @@ impl PermissionConfig {
         config
     }
 
-    pub fn allows(&self, sender: u16, receiver: u16) -> bool {
+    pub fn allows(&self, sender: u16, receiver: u16, capability: Capability) -> bool {
         let count = core::cmp::min(self.count as usize, MAX_PERMISSION_RULES);
-        self.rules[..count]
-            .iter()
-            .any(|rule| rule.sender == sender && rule.receiver == receiver)
+        self.rules[..count].iter().any(|rule| {
+            rule.sender == sender && rule.receiver == receiver && rule.capability == capability
+        })
     }
 }
 
 const DEFAULT_PERMISSIONS: PermissionConfig = PermissionConfig::with_rules(&[PermissionRule {
     sender: 1,
     receiver: 2,
+    capability: Capability {
+        id: capability::IPC_SEND_CAPABILITY,
+    },
 }]);
 
 static mut QUEUE: [Option<Message>; MSG_CAPACITY] = [None; MSG_CAPACITY];
@@ -68,11 +75,15 @@ static mut TAIL: usize = 0;
 static mut COUNT: usize = 0;
 static mut PERMISSIONS: PermissionConfig = DEFAULT_PERMISSIONS;
 
-fn allowed(sender: u16, receiver: u16) -> bool {
+fn allowed(message: &Message) -> bool {
     unsafe {
         let config = &raw const PERMISSIONS;
-        (&*config).allows(sender, receiver)
+        (&*config).allows(message.sender, message.receiver, message.capability)
     }
+}
+
+fn capability_allowed(message: &Message) -> bool {
+    capability::holds(message.sender, message.capability)
 }
 
 pub fn load_permissions(config: &PermissionConfig) {
@@ -83,11 +94,12 @@ pub fn load_permissions(config: &PermissionConfig) {
 }
 
 pub fn send(message: Message) -> Result<(), ()> {
-    if !allowed(message.sender, message.receiver) {
+    if !allowed(&message) || !capability_allowed(&message) {
         crate::serial_println!(
-            "[IPC] permission denied: {} -> {}",
+            "[IPC] permission denied: {} -> {} (capability {})",
             message.sender,
-            message.receiver
+            message.receiver,
+            message.capability.id
         );
         return Err(());
     }
@@ -135,6 +147,9 @@ pub fn test_message() -> Message {
         sender: 1,
         receiver: 2,
         message_type: 1,
+        capability: Capability {
+            id: capability::IPC_SEND_CAPABILITY,
+        },
         payload,
     }
 }
@@ -142,23 +157,27 @@ pub fn test_message() -> Message {
 #[cfg(test)]
 mod tests {
     use super::{MAX_PERMISSION_RULES, PermissionConfig, PermissionRule};
+    use crate::capability::Capability;
 
     #[test]
     fn permission_table_changes_runtime_decision() {
         let config = PermissionConfig::with_rules(&[PermissionRule {
             sender: 7,
             receiver: 9,
+            capability: Capability { id: 3 },
         }]);
         assert_eq!(config.count, 1);
         assert_eq!(
             config.rules[0],
             PermissionRule {
                 sender: 7,
-                receiver: 9
+                receiver: 9,
+                capability: Capability { id: 3 }
             }
         );
-        assert!(config.allows(7, 9));
-        assert!(!config.allows(1, 2));
+        assert!(config.allows(7, 9, Capability { id: 3 }));
+        assert!(!config.allows(7, 9, Capability { id: 4 }));
+        assert!(!config.allows(1, 2, Capability { id: 3 }));
         assert!(config.count as usize <= MAX_PERMISSION_RULES);
     }
 
@@ -167,6 +186,7 @@ mod tests {
         let rules = [PermissionRule {
             sender: 1,
             receiver: 2,
+            capability: Capability { id: 1 },
         }; MAX_PERMISSION_RULES + 1];
         let config = PermissionConfig::with_rules(&rules);
         assert_eq!(config.count as usize, MAX_PERMISSION_RULES);

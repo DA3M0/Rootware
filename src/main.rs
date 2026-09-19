@@ -2,6 +2,7 @@
 #![no_main]
 
 mod gdt;
+mod capability;
 mod idt;
 mod memory;
 mod panic;
@@ -34,6 +35,7 @@ pub extern "C" fn rust_start(mb_info: u64) -> ! {
     memory::init(mb_info_low);
     vmem::init();
     vmem::test();
+    capability::init();
     ipc::init();
     idt::init();
     scheduler::init();

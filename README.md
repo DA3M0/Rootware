@@ -58,7 +58,7 @@ Built by the community, largely reusing existing components:
 ## Beta roadmap
 
 - [x] Beta 2: configurable IPC permission rules
-- [ ] Beta 3: capability model
+- [x] Beta 3: capability model
 - [ ] Beta 4: message types and routing
 - [ ] Beta 5: persistent audit log and queries
 - [ ] Beta 6: IPC performance and stability
