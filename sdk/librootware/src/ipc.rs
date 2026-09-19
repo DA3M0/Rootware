@@ -56,7 +56,8 @@ pub trait Transport {
 
 #[cfg(feature = "std")]
 pub struct InMemoryTransport {
-    queue: std::collections::VecDeque<Message>,
+    queues: std::collections::HashMap<u16, std::collections::VecDeque<Message>>,
+    queued: usize,
     capacity: usize,
 }
 
@@ -64,7 +65,8 @@ pub struct InMemoryTransport {
 impl InMemoryTransport {
     pub fn new(capacity: usize) -> Self {
         Self {
-            queue: std::collections::VecDeque::new(),
+            queues: std::collections::HashMap::new(),
+            queued: 0,
             capacity,
         }
     }
@@ -83,25 +85,36 @@ impl Transport for InMemoryTransport {
         if message.sender == 0 || message.receiver == 0 || message.capability.id == 0 {
             return Err(Error::new(ErrorCode::PermissionDenied));
         }
-        if self.queue.len() == self.capacity {
+        if self.queued == self.capacity {
             return Err(Error::new(ErrorCode::QueueFull));
         }
-        self.queue.push_back(message);
+        self.queues
+            .entry(message.receiver)
+            .or_default()
+            .push_back(message);
+        self.queued += 1;
         Ok(())
     }
 
     fn receive(&mut self, receiver: u16) -> Result<Message> {
-        let index = self
-            .queue
-            .iter()
-            .position(|m| m.receiver == receiver)
+        let queue = self
+            .queues
+            .get_mut(&receiver)
             .ok_or(Error::new(ErrorCode::QueueEmpty))?;
-        self.queue
-            .remove(index)
-            .ok_or(Error::new(ErrorCode::QueueEmpty))
+        let message = queue
+            .pop_front()
+            .ok_or(Error::new(ErrorCode::QueueEmpty))?;
+        self.queued -= 1;
+        if queue.is_empty() {
+            self.queues.remove(&receiver);
+        }
+        Ok(message)
     }
 
     fn reply(&mut self, request: &Message, payload: [u8; PAYLOAD_SIZE]) -> Result<()> {
+        if request.receiver == 0 || request.sender == 0 {
+            return Err(Error::new(ErrorCode::InvalidArgument));
+        }
         self.send(Message::new(
             request.receiver,
             request.sender,
