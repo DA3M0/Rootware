@@ -60,6 +60,6 @@ Built by the community, largely reusing existing components:
 - [x] Beta 2: configurable IPC permission rules
 - [x] Beta 3: capability model
 - [x] Beta 4: message types and routing
-- [ ] Beta 5: persistent audit log and queries
-- [ ] Beta 6: IPC performance and stability
-- [ ] Beta 7: frozen ABI and end-to-end validation
+- [x] Beta 5: persistent audit log and queries
+- [x] Beta 6: IPC performance and stability
+- [x] Beta 7: frozen ABI and end-to-end validation

@@ -15,13 +15,13 @@ pub struct UserServiceAbi {
 }
 
 static SERVICE: UserServiceAbi = UserServiceAbi {
-    abi_version: 1,
+    abi_version: 3,
     entry_point: USER_CODE,
     stack_pointer: USER_STACK + 4096 - 16,
 };
 
 pub fn init() -> ! {
-    crate::serial_println!("[BETA] ABI v2 ready");
+    crate::serial_println!("[BETA] ABI v3 ready");
     crate::vmem::map_page(USER_CODE, CODE_PHYS, crate::vmem::USER | crate::vmem::WRITABLE)
         .expect("user code map failed");
     crate::vmem::map_page(USER_STACK, STACK_PHYS, crate::vmem::USER | crate::vmem::WRITABLE)

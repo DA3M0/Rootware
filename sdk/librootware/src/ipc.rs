@@ -3,6 +3,7 @@ use crate::error::{Error, ErrorCode, Result};
 
 pub const PAYLOAD_SIZE: usize = 32;
 pub const BROADCAST_RECEIVER: u16 = u16::MAX;
+pub const ABI_VERSION: u32 = 3;
 
 pub mod message_type {
     pub const REQUEST: u16 = 1;
@@ -129,5 +130,35 @@ mod tests {
         assert_eq!(message_type::REQUEST, 1);
         assert_eq!(message_type::BROADCAST, 4);
         assert_eq!(BROADCAST_RECEIVER, u16::MAX);
+    }
+
+    #[test]
+    fn throughput_and_no_loss_under_pressure() {
+        let mut transport = InMemoryTransport::new(256);
+        let total = 10_000;
+        for index in 0..total {
+            let mut payload = [0; PAYLOAD_SIZE];
+            payload[..8].copy_from_slice(&(index as u64).to_le_bytes());
+            transport
+                .send(Message::new(
+                    1,
+                    2,
+                    message_type::EVENT,
+                    Capability { id: 1 },
+                    payload,
+                ))
+                .unwrap_or_else(|_| panic!("queue rejected message {index}"));
+            let received = transport.receive(2).unwrap();
+            assert_eq!(
+                u64::from_le_bytes(received.payload[..8].try_into().unwrap()),
+                index as u64
+            );
+        }
+    }
+
+    #[test]
+    fn abi_version_and_message_size_are_frozen() {
+        assert_eq!(ABI_VERSION, 3);
+        assert_eq!(core::mem::size_of::<Message>(), 44);
     }
 }

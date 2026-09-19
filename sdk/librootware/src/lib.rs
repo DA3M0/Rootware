@@ -14,4 +14,4 @@ pub use error::{Error, ErrorCode, Result};
 pub use ipc::{Message, Transport};
 
 /// ABI version implemented by this SDK.
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;

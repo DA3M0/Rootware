@@ -6,6 +6,7 @@ pub const MSG_CAPACITY: usize = 8;
 pub const MAX_PERMISSION_RULES: usize = 8;
 pub const MAX_ROUTE_RULES: usize = 8;
 pub const BROADCAST_RECEIVER: u16 = u16::MAX;
+pub const ABI_VERSION: u32 = 3;
 
 pub mod message_type {
     pub const REQUEST: u16 = 1;
@@ -202,6 +203,14 @@ pub fn send(message: Message) -> Result<(), ()> {
         (&*(&raw const ROUTES)).targets(message.message_type, message.receiver, &mut targets)
     };
     if target_count == 0 || !capability_allowed(&message) {
+        crate::audit::record(crate::audit::AuditEntry {
+            timestamp: crate::timer::ticks(),
+            sender: message.sender,
+            receiver: message.receiver,
+            message_type: message.message_type,
+            result: 0,
+            capability: message.capability.id,
+        });
         crate::serial_println!("[IPC] route denied: type {}", message.message_type);
         return Err(());
     }
@@ -213,6 +222,14 @@ pub fn send(message: Message) -> Result<(), ()> {
                 receiver,
                 message.capability.id
             );
+            crate::audit::record(crate::audit::AuditEntry {
+                timestamp: crate::timer::ticks(),
+                sender: message.sender,
+                receiver: *receiver,
+                message_type: message.message_type,
+                result: 0,
+                capability: message.capability.id,
+            });
             return Err(());
         }
     }
@@ -227,6 +244,14 @@ pub fn send(message: Message) -> Result<(), ()> {
             (*(&raw mut QUEUE))[tail] = Some(routed);
             TAIL = (tail + 1) % MSG_CAPACITY;
             COUNT += 1;
+            crate::audit::record(crate::audit::AuditEntry {
+                timestamp: crate::timer::ticks(),
+                sender: message.sender,
+                receiver: *receiver,
+                message_type: message.message_type,
+                result: 1,
+                capability: message.capability.id,
+            });
         }
     }
     crate::serial_println!(
