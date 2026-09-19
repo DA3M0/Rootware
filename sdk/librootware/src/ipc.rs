@@ -148,6 +148,27 @@ mod tests {
     }
 
     #[test]
+    fn receiver_queues_are_isolated() {
+        let mut transport = InMemoryTransport::new(2);
+        let first = Message::new(1, 2, message_type::EVENT, Capability { id: 1 }, [2; PAYLOAD_SIZE]);
+        let second = Message::new(1, 3, message_type::EVENT, Capability { id: 1 }, [3; PAYLOAD_SIZE]);
+        transport.send(first).unwrap();
+        transport.send(second).unwrap();
+        assert_eq!(transport.receive(3).unwrap(), second);
+        assert_eq!(transport.receive(2).unwrap(), first);
+    }
+
+    #[test]
+    fn reply_rejects_invalid_routes() {
+        let mut transport = InMemoryTransport::default();
+        let request = Message::new(0, 2, message_type::REQUEST, Capability { id: 1 }, [0; PAYLOAD_SIZE]);
+        assert_eq!(
+            transport.reply(&request, [0; PAYLOAD_SIZE]),
+            Err(Error::new(ErrorCode::InvalidArgument))
+        );
+    }
+
+    #[test]
     fn throughput_and_no_loss_under_pressure() {
         let mut transport = InMemoryTransport::new(256);
         let total = 10_000;

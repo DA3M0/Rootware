@@ -113,8 +113,15 @@ impl ServiceRegistry {
         if self.state == ServiceState::Running {
             return Err(Error::new(ErrorCode::InvalidArgument));
         }
-        for service in &mut self.services {
-            service.init()?;
+        let mut initialized = 0;
+        while initialized < self.services.len() {
+            if let Err(error) = self.services[initialized].init() {
+                for service in &mut self.services[..initialized] {
+                    service.stop();
+                }
+                return Err(error);
+            }
+            initialized += 1;
         }
         self.state = ServiceState::Running;
         Ok(())
