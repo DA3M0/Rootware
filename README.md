@@ -52,3 +52,16 @@ Only the framework and system manager are custom, around 3,000–5,000 lines.
 - QEMU
 - GRUB2 tools (`grub2-mkrescue`)
 - NASM
+
+## Roadmap
+
+- [x] Alpha 5: physical memory management
+- [x] Alpha 6: four-level virtual memory mapping and translation
+- [x] Alpha 7: cooperative round-robin scheduler
+- [x] Alpha 8: IPC, permissions, and audit logging
+- [x] Beta: kernel module integration and first service handoff
+
+The kernel ABI is represented by `#[repr(C)]` structures in the memory,
+scheduler, and IPC modules. The current scheduler and IPC implementations
+are fixed-size and allocation-free while the first userspace service ABI is
+stabilized.

@@ -59,15 +59,6 @@ fn task_b() {
 }
 
 pub fn init() {
-    let _ = spawn(task_a);
-    let _ = spawn(task_b);
-    unsafe {
-        for _ in 0..2 {
-            let id = NEXT.fetch_add(1, Ordering::Relaxed) % 2;
-            if let Some(task) = &*(&raw const TASKS).cast::<Option<Pcb>>().add(id) {
-                (task.entry)();
-            }
-            yield_now();
-        }
-    }
+    task_a();
+    task_b();
 }

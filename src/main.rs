@@ -10,6 +10,7 @@ mod timer;
 mod vmem;
 mod scheduler;
 mod ipc;
+mod service;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_start(mb_info: u64) -> ! {
@@ -35,6 +36,7 @@ pub extern "C" fn rust_start(mb_info: u64) -> ! {
     vmem::test();
     scheduler::init();
     ipc::init();
+    service::init();
 
     loop {
         unsafe {
