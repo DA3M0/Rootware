@@ -13,6 +13,8 @@
 - `ipc::message_type`：标准 `REQUEST`、`RESPONSE`、`EVENT`、`BROADCAST` 类型；`RouteRule` 描述类型到接收方的路由。
 - `ipc::BROADCAST_RECEIVER`：广播消息的特殊接收方；内核按路由表复制到多个目标队列。
 - `capability::Capability`：`#[repr(C)]` 的 32 位能力令牌；`CapabilityProvider` 请求和检查能力，模拟器提供内存实现。
+- `capability::capability_kind`：标准能力类型命名空间，包括 `IPC_SEND = 1`、
+  `FS_READ = 2` 和 `FS_WRITE = 3`。
 - IPC 发送要求消息携带的能力令牌同时被发送方持有，并匹配权限规则中的所需能力；无能力或无效令牌会被拒绝。
 - `log::log`、`log::log_args`、`info!`、`warn!`：统一日志接口；宏直接传递
   `format_args!`，不在 `no_std` 下分配字符串。
