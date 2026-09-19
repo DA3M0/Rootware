@@ -8,6 +8,7 @@ mod panic;
 mod serial;
 mod timer;
 mod vmem;
+mod scheduler;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_start(mb_info: u64) -> ! {
@@ -31,6 +32,7 @@ pub extern "C" fn rust_start(mb_info: u64) -> ! {
     memory::init(mb_info_low);
     vmem::init();
     vmem::test();
+    scheduler::init();
 
     loop {
         unsafe {
