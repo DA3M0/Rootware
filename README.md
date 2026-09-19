@@ -29,7 +29,7 @@ Rootware has three layers:
 - Scheduler (round-robin, real context switching)
 - Virtual memory (4-level page tables, CR3 switching)
 - Physical memory management (bitmap allocator)
-- IPC + security layer (message passing, permission checks, audit log)
+- IPC + security layer (message passing, configurable permission checks, audit log)
 - Interrupt/exception handling (GDT, IDT, APIC timer)
 - Architecture abstraction (x86_64)
 
@@ -54,3 +54,12 @@ Built by the community, largely reusing existing components:
 - QEMU
 - GRUB2 tools (`grub2-mkrescue`)
 - NASM
+
+## Beta roadmap
+
+- [x] Beta 2: configurable IPC permission rules
+- [ ] Beta 3: capability model
+- [ ] Beta 4: message types and routing
+- [ ] Beta 5: persistent audit log and queries
+- [ ] Beta 6: IPC performance and stability
+- [ ] Beta 7: frozen ABI and end-to-end validation
