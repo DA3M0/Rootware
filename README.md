@@ -60,6 +60,8 @@ Only the framework and system manager are custom, around 3,000–5,000 lines.
 - [x] Alpha 7: cooperative round-robin scheduler
 - [x] Alpha 8: IPC, permissions, and audit logging
 - [x] Beta: kernel module integration and first service handoff
+- [x] Functional Beta VMEM milestone: long-mode entry, CR3 installation,
+  virtual write and physical read verification in QEMU
 
 The kernel ABI is represented by `#[repr(C)]` structures in the memory,
 scheduler, and IPC modules. The current scheduler and IPC implementations
