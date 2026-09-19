@@ -1,4 +1,3 @@
-cat > README.md << 'EOF'
 # Rootware
 
 Rootware is a microkernel operating system written from scratch in Rust.
@@ -17,23 +16,28 @@ I'm 15, and I've been learning Rust for about a week. I wanted to learn by build
 | Target | x86_64-unknown-none |
 | Kernel License | Apache 2.0 |
 
+## Status
+
+Beta — functional kernel. Virtual memory, scheduler, IPC, and first userspace service are working.
+
 ## Architecture
 
 Rootware has three layers:
 
 ### Kernel (Apache 2.0)
 
-- Scheduler
-- Memory management
-- IPC + security layer
-- Interrupt/exception handling
+- Scheduler (round-robin, real context switching)
+- Virtual memory (4-level page tables, CR3 switching)
+- Physical memory management (bitmap allocator)
+- IPC + security layer (message passing, permission checks, audit log)
+- Interrupt/exception handling (GDT, IDT, APIC timer)
 - Architecture abstraction (x86_64)
 
-Around 15,000–20,000 lines, zero third-party dependencies. The security layer lives inside IPC — every message passes a permission check.
+Around 15,000–20,000 lines, zero third-party dependencies.
 
 ### Userspace (Mixed Licenses)
 
-Largely reuses existing components:
+Built by the community, largely reusing existing components:
 
 - Filesystem: ext4
 - Drivers: Linux drivers (via rkm)
@@ -41,8 +45,6 @@ Largely reuses existing components:
 - Coreutils: uutils
 - Python: RustPython
 - Editor: Helix
-
-Only the framework and system manager are custom, around 3,000–5,000 lines.
 
 ## Build & Run
 
@@ -52,23 +54,3 @@ Only the framework and system manager are custom, around 3,000–5,000 lines.
 - QEMU
 - GRUB2 tools (`grub2-mkrescue`)
 - NASM
-
-## Roadmap
-
-- [x] Alpha 5: physical memory management
-- [x] Alpha 6: four-level virtual memory mapping and translation
-- [x] Alpha 7: cooperative round-robin scheduler
-- [x] Alpha 8: IPC, permissions, and audit logging
-- [x] Beta: kernel module integration and first service handoff
-- [x] Functional Beta VMEM milestone: long-mode entry, CR3 installation,
-  virtual write and physical read verification in QEMU
-- [x] Functional scheduler milestone: assembly context switching and
-  alternating kernel tasks in QEMU
-- [x] Functional IPC milestone: task A sends and task B receives messages
-- [x] Functional userspace milestone: Ring 3 service enters through `sysretq`
-  and invokes a kernel syscall
-
-The kernel ABI is represented by `#[repr(C)]` structures in the memory,
-scheduler, and IPC modules. The current scheduler and IPC implementations
-are fixed-size and allocation-free while the first userspace service ABI is
-stabilized.
