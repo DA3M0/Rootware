@@ -4,6 +4,15 @@ use crate::capability::{self, Capability};
 pub const PAYLOAD_SIZE: usize = 32;
 pub const MSG_CAPACITY: usize = 8;
 pub const MAX_PERMISSION_RULES: usize = 8;
+pub const MAX_ROUTE_RULES: usize = 8;
+pub const BROADCAST_RECEIVER: u16 = u16::MAX;
+
+pub mod message_type {
+    pub const REQUEST: u16 = 1;
+    pub const RESPONSE: u16 = 2;
+    pub const EVENT: u16 = 3;
+    pub const BROADCAST: u16 = 4;
+}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -28,6 +37,61 @@ pub struct PermissionRule {
 pub struct PermissionConfig {
     pub rules: [PermissionRule; MAX_PERMISSION_RULES],
     pub count: u16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RouteRule {
+    pub message_type: u16,
+    pub receiver: u16,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RouteConfig {
+    pub rules: [RouteRule; MAX_ROUTE_RULES],
+    pub count: u16,
+}
+
+impl RouteConfig {
+    pub const fn with_rules(rules: &[RouteRule]) -> Self {
+        let mut config = Self {
+            rules: [RouteRule {
+                message_type: 0,
+                receiver: 0,
+            }; MAX_ROUTE_RULES],
+            count: 0,
+        };
+        let mut index = 0;
+        while index < rules.len() && index < MAX_ROUTE_RULES {
+            config.rules[index] = rules[index];
+            index += 1;
+        }
+        config.count = index as u16;
+        config
+    }
+
+    fn targets(
+        &self,
+        message_type: u16,
+        requested: u16,
+        targets: &mut [u16; MAX_ROUTE_RULES],
+    ) -> usize {
+        let count = core::cmp::min(self.count as usize, MAX_ROUTE_RULES);
+        let mut found = 0;
+        for rule in &self.rules[..count] {
+            if rule.message_type == message_type && found < MAX_ROUTE_RULES {
+                targets[found] = rule.receiver;
+                found += 1;
+            }
+        }
+        if found == 0 && requested != BROADCAST_RECEIVER {
+            targets[0] = requested;
+            1
+        } else {
+            found
+        }
+    }
 }
 
 impl PermissionConfig {
@@ -61,24 +125,56 @@ impl PermissionConfig {
     }
 }
 
-const DEFAULT_PERMISSIONS: PermissionConfig = PermissionConfig::with_rules(&[PermissionRule {
-    sender: 1,
-    receiver: 2,
-    capability: Capability {
-        id: capability::IPC_SEND_CAPABILITY,
+const DEFAULT_PERMISSIONS: PermissionConfig = PermissionConfig::with_rules(&[
+    PermissionRule {
+        sender: 1,
+        receiver: 2,
+        capability: Capability {
+            id: capability::IPC_SEND_CAPABILITY,
+        },
     },
-}]);
+    PermissionRule {
+        sender: 1,
+        receiver: 3,
+        capability: Capability {
+            id: capability::IPC_SEND_CAPABILITY,
+        },
+    },
+]);
+const DEFAULT_ROUTES: RouteConfig = RouteConfig::with_rules(&[
+    RouteRule {
+        message_type: message_type::REQUEST,
+        receiver: 2,
+    },
+    RouteRule {
+        message_type: message_type::RESPONSE,
+        receiver: 1,
+    },
+    RouteRule {
+        message_type: message_type::EVENT,
+        receiver: 2,
+    },
+    RouteRule {
+        message_type: message_type::BROADCAST,
+        receiver: 2,
+    },
+    RouteRule {
+        message_type: message_type::BROADCAST,
+        receiver: 3,
+    },
+]);
 
 static mut QUEUE: [Option<Message>; MSG_CAPACITY] = [None; MSG_CAPACITY];
 static mut HEAD: usize = 0;
 static mut TAIL: usize = 0;
 static mut COUNT: usize = 0;
 static mut PERMISSIONS: PermissionConfig = DEFAULT_PERMISSIONS;
+static mut ROUTES: RouteConfig = DEFAULT_ROUTES;
 
-fn allowed(message: &Message) -> bool {
+fn allowed(message: &Message, receiver: u16) -> bool {
     unsafe {
         let config = &raw const PERMISSIONS;
-        (&*config).allows(message.sender, message.receiver, message.capability)
+        (&*config).allows(message.sender, receiver, message.capability)
     }
 }
 
@@ -93,29 +189,50 @@ pub fn load_permissions(config: &PermissionConfig) {
     crate::serial_println!("[IPC] permission table loaded");
 }
 
+pub fn load_routes(config: &RouteConfig) {
+    unsafe {
+        (&raw mut ROUTES).write(*config);
+    }
+    crate::serial_println!("[IPC] route table loaded");
+}
+
 pub fn send(message: Message) -> Result<(), ()> {
-    if !allowed(&message) || !capability_allowed(&message) {
-        crate::serial_println!(
-            "[IPC] permission denied: {} -> {} (capability {})",
-            message.sender,
-            message.receiver,
-            message.capability.id
-        );
+    let mut targets = [0; MAX_ROUTE_RULES];
+    let target_count = unsafe {
+        (&*(&raw const ROUTES)).targets(message.message_type, message.receiver, &mut targets)
+    };
+    if target_count == 0 || !capability_allowed(&message) {
+        crate::serial_println!("[IPC] route denied: type {}", message.message_type);
         return Err(());
     }
-    unsafe {
-        if COUNT == MSG_CAPACITY {
+    for receiver in &targets[..target_count] {
+        if !allowed(&message, *receiver) {
+            crate::serial_println!(
+                "[IPC] permission denied: {} -> {} (capability {})",
+                message.sender,
+                receiver,
+                message.capability.id
+            );
             return Err(());
         }
-        let tail = TAIL;
-        (*(&raw mut QUEUE))[tail] = Some(message);
-        TAIL = (tail + 1) % MSG_CAPACITY;
-        COUNT += 1;
+    }
+    unsafe {
+        if COUNT + target_count > MSG_CAPACITY {
+            return Err(());
+        }
+        for receiver in &targets[..target_count] {
+            let mut routed = message;
+            routed.receiver = *receiver;
+            let tail = TAIL;
+            (*(&raw mut QUEUE))[tail] = Some(routed);
+            TAIL = (tail + 1) % MSG_CAPACITY;
+            COUNT += 1;
+        }
     }
     crate::serial_println!(
-        "[IPC] message sent: {} -> {}",
-        message.sender,
-        message.receiver
+        "[IPC] message routed: type {} to {} recipient(s)",
+        message.message_type,
+        target_count
     );
     Ok(())
 }
@@ -137,6 +254,7 @@ pub fn recv(receiver: u16) -> Option<Message> {
 
 pub fn init() {
     load_permissions(&DEFAULT_PERMISSIONS);
+    load_routes(&DEFAULT_ROUTES);
     crate::serial_println!("[IPC] audit: configurable permission checks enabled");
 }
 
@@ -146,7 +264,7 @@ pub fn test_message() -> Message {
     Message {
         sender: 1,
         receiver: 2,
-        message_type: 1,
+        message_type: message_type::REQUEST,
         capability: Capability {
             id: capability::IPC_SEND_CAPABILITY,
         },
@@ -156,7 +274,10 @@ pub fn test_message() -> Message {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_PERMISSION_RULES, PermissionConfig, PermissionRule};
+    use super::{
+        BROADCAST_RECEIVER, MAX_PERMISSION_RULES, PermissionConfig, PermissionRule, RouteConfig,
+        RouteRule, message_type,
+    };
     use crate::capability::Capability;
 
     #[test]
@@ -190,5 +311,25 @@ mod tests {
         }; MAX_PERMISSION_RULES + 1];
         let config = PermissionConfig::with_rules(&rules);
         assert_eq!(config.count as usize, MAX_PERMISSION_RULES);
+    }
+
+    #[test]
+    fn message_type_routes_and_broadcasts() {
+        let config = RouteConfig::with_rules(&[
+            RouteRule {
+                message_type: message_type::BROADCAST,
+                receiver: 2,
+            },
+            RouteRule {
+                message_type: message_type::BROADCAST,
+                receiver: 3,
+            },
+        ]);
+        let mut targets = [0; super::MAX_ROUTE_RULES];
+        assert_eq!(
+            config.targets(message_type::BROADCAST, BROADCAST_RECEIVER, &mut targets),
+            2
+        );
+        assert_eq!(&targets[..2], &[2, 3]);
     }
 }

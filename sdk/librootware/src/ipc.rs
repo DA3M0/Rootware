@@ -2,6 +2,21 @@ use crate::capability::Capability;
 use crate::error::{Error, ErrorCode, Result};
 
 pub const PAYLOAD_SIZE: usize = 32;
+pub const BROADCAST_RECEIVER: u16 = u16::MAX;
+
+pub mod message_type {
+    pub const REQUEST: u16 = 1;
+    pub const RESPONSE: u16 = 2;
+    pub const EVENT: u16 = 3;
+    pub const BROADCAST: u16 = 4;
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RouteRule {
+    pub message_type: u16,
+    pub receiver: u16,
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -107,5 +122,12 @@ mod tests {
         assert_eq!(transport.receive(2).unwrap(), request);
         transport.reply(&request, [2; PAYLOAD_SIZE]).unwrap();
         assert_eq!(transport.receive(1).unwrap().payload, [2; PAYLOAD_SIZE]);
+    }
+
+    #[test]
+    fn standard_message_types_are_stable() {
+        assert_eq!(message_type::REQUEST, 1);
+        assert_eq!(message_type::BROADCAST, 4);
+        assert_eq!(BROADCAST_RECEIVER, u16::MAX);
     }
 }
