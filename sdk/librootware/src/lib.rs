@@ -9,6 +9,7 @@ pub mod capability;
 pub mod error;
 pub mod ipc;
 pub mod log;
+pub mod service;
 pub mod syscall;
 
 pub use error::{Error, ErrorCode, Result};

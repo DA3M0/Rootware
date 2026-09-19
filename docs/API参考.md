@@ -7,6 +7,9 @@
   IPC 传输；Linux 等其他目标会明确返回 `ErrorCode::Unsupported`。syscall 号为
   `SYS_IPC_SEND = 1`、`SYS_IPC_RECEIVE = 2`、`SYS_IPC_REPLY = 3`，消息和输出
   缓冲区使用 ABI v3 的固定布局。
+- `service::Service`：服务的 `name`、`init`、`handle` 和 `stop` 生命周期接口。
+  `ServiceRegistry`（`std` feature）负责注册、启动、停止和按名称分发；
+  `EchoService` 是可用于入门和测试的最小服务示例。
 - `ipc::message_type`：标准 `REQUEST`、`RESPONSE`、`EVENT`、`BROADCAST` 类型；`RouteRule` 描述类型到接收方的路由。
 - `ipc::BROADCAST_RECEIVER`：广播消息的特殊接收方；内核按路由表复制到多个目标队列。
 - `capability::Capability`：`#[repr(C)]` 的 32 位能力令牌；`CapabilityProvider` 请求和检查能力，模拟器提供内存实现。
