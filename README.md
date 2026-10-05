@@ -4,7 +4,7 @@ Rootware is a microkernel operating system written from scratch in Rust.
 
 ## Why
 
-I'm 15, and I've been learning Rust for about a week. I wanted to learn by building a real operating system. Most tutorials either assume prior knowledge, use nightly, or rely on third-party libraries. So I decided to start from zero and write one myself.
+I wanted to learn by building a real operating system. Most tutorials either assume prior knowledge, use nightly, or rely on third-party libraries. So I decided to start from zero and write one myself.
 
 ## Tech Stack
 
