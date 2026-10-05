@@ -28,9 +28,30 @@ const APIC_TIMER_FREQUENCY: u64 = 100_000_000;
 
 static TICKS: AtomicU64 = AtomicU64::new(0);
 
+/// Mask every legacy 8259 PIC line: the kernel drives devices through the
+/// APIC only, so spurious PIC vectors must never reach the IDT.
+fn mask_legacy_pic() {
+    unsafe {
+        outb(0x21, 0xFF); // master: all IRQs masked
+        outb(0xA1, 0xFF); // slave: all IRQs masked
+    }
+}
+
+unsafe fn outb(port: u16, value: u8) {
+    unsafe {
+        core::arch::asm!(
+            "out dx, al",
+            in("dx") port,
+            in("al") value,
+            options(nomem, nostack)
+        );
+    }
+}
+
 /// 初始化本地 APIC 定时器
 pub fn init() {
     unsafe {
+        mask_legacy_pic();
         // 1. 启用 APIC（设置 Spurious Interrupt Vector Register）
         // 位 8 是 APIC 软件使能位，向量 0xFF 是伪中断向量
         let spurious = read_volatile((APIC_BASE + APIC_SPURIOUS) as *const u32);
@@ -59,12 +80,7 @@ pub fn init() {
 
 /// 每次时钟中断调用
 pub fn tick() {
-    let count = TICKS.fetch_add(1, Ordering::Relaxed) + 1;
-
-    // 每 100 次（1 秒）输出一次
-    if count % 100 == 0 {
-        crate::serial_println!("[TIMER] {} seconds", count / 100);
-    }
+    TICKS.fetch_add(1, Ordering::Relaxed);
 }
 
 /// 发送 EOI（End of Interrupt）给 APIC

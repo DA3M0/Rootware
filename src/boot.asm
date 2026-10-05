@@ -47,8 +47,14 @@ _start:
     mov eax, bootstrap_pdp
     mov cr3, eax
     mov eax, cr4
-    or eax, 1 << 5
+    or eax, 1 << 5              ; PAE
+    or eax, 1 << 10             ; OSXMMEXCPT (SSE exceptions are defined)
+    or eax, 1 << 9              ; OSFXSR: enable SSE codegen in the kernel
     mov cr4, eax
+    mov eax, cr0
+    and ax, ~(1 << 2)           ; clear EM: no math-emulate traps
+    or ax, (1 << 1)             ; set MP: monitor coprocessor
+    mov cr0, eax
     mov ecx, 0xC0000080
     rdmsr
     or eax, 1 << 8

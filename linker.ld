@@ -30,4 +30,7 @@ SECTIONS {
     .requests : ALIGN(4K) {
         KEEP(*(.requests))
     }
+
+    /* First physical frame the allocator may hand out. */
+    PROVIDE(kernel_end = .);
 }

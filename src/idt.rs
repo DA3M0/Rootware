@@ -1,24 +1,43 @@
 //! IDT（中断描述符表）模块
 //!
-//! IDT 定义了 256 个中断处理程序的入口。
-//! 每个描述符 16 字节，指向一个处理函数。
+//! 每个向量都有完整栈帧的处理器：所有通用寄存器被保存，带错误码的
+//! 异常与不带错误码的异常使用统一的帧布局。双重故障运行在独立 IST
+//! 栈上。syscall 入口切换到每进程内核栈，STAR/FMASK 与新 GDT 的
+//! Ring 3 描述符配套。
 
-use core::mem;
 use core::arch::global_asm;
+use core::mem;
 
 global_asm!(
     ".global rootware_syscall_entry",
     "rootware_syscall_entry:",
-    "push rcx",
-    "push r11",
+    // The `syscall` instruction leaves rsp on the user stack and clobbers
+    // only rcx (return rip) and r11 (rflags). Stash those two on the user
+    // stack, bridge the user rsp through a static, then switch to the
+    // current process's kernel stack.
+    "push rcx",                         // user stack: return rip
+    "push r11",                         // user stack: rflags
+    "mov [rip + KSTACK_SAVE], rsp",     // remember user rsp
+    "mov rsp, [rip + KSTACK_TOP]",      // switch to the kernel stack
+    "push qword ptr [rip + KSTACK_SAVE]",
     "mov rdx, rsi",
     "mov rsi, rdi",
     "mov rdi, rax",
     "call rootware_syscall_handler",
-    "pop r11",
-    "pop rcx",
+    "pop rsp",                          // back to the user stack
+    "pop r11",                          // rflags
+    "pop rcx",                          // return rip
     "sysretq",
 );
+
+/// Kernel stack top used by the syscall entry (per current process).
+#[unsafe(no_mangle)]
+static mut KSTACK_TOP: u64 = 0;
+
+/// Bridge slot carrying the user RSP across the stack switch. Single-core
+/// kernel, so one slot suffices.
+#[unsafe(no_mangle)]
+static mut KSTACK_SAVE: u64 = 0;
 
 unsafe extern "C" {
     fn rootware_syscall_entry();
@@ -63,6 +82,11 @@ impl IdtEntry {
             reserved: 0,
         }
     }
+
+    fn with_ist(mut self, ist: u8) -> Self {
+        self.ist = ist & 0x07;
+        self
+    }
 }
 
 /// IDTR 寄存器的值
@@ -75,34 +99,186 @@ struct IdtPointer {
 /// 我们的 IDT，包含 256 个描述符
 static mut IDT: [IdtEntry; 256] = [IdtEntry::missing(); 256];
 
+/// syscall 入口与异常桩共用的完整中断帧（栈顶从 vector 开始）。
+#[repr(C)]
+pub struct ExceptionFrame {
+    pub vector: u64,
+    pub rax: u64,
+    pub rbx: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub rbp: u64,
+    pub r8: u64,
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
+    pub error: u64,
+    pub rip: u64,
+    pub cs: u64,
+    pub rflags: u64,
+    pub rsp: u64,
+    pub ss: u64,
+}
+
+/// 生成带/不带错误码异常的统一桩：保存全部通用寄存器，压入向量号，
+/// 调用公共分发器后按相反顺序恢复。
+macro_rules! exception_stub {
+    ($name:ident, $vector:expr, $error:tt) => {
+        global_asm!(
+            concat!(".global ", stringify!($name)),
+            concat!(stringify!($name), ":"),
+            $error,
+            "push r15", "push r14", "push r13", "push r12", "push r11",
+            "push r10", "push r9", "push r8", "push rbp", "push rdi",
+            "push rsi", "push rdx", "push rcx", "push rbx", "push rax",
+            concat!("push ", stringify!($vector)),
+            "mov rdi, rsp",
+            "call rootware_exception_dispatch",
+            "add rsp, 8",
+            "pop rax", "pop rbx", "pop rcx", "pop rdx", "pop rsi", "pop rdi",
+            "pop rbp", "pop r8", "pop r9", "pop r10", "pop r11", "pop r12",
+            "pop r13", "pop r14", "pop r15",
+            "add rsp, 8",
+            "iretq",
+        );
+    };
+}
+
+exception_stub!(rootware_exc_divide, 0, "push 0");
+exception_stub!(rootware_exc_invalid_opcode, 6, "push 0");
+exception_stub!(rootware_exc_double_fault, 8, "");
+exception_stub!(rootware_exc_general_protection, 13, "");
+exception_stub!(rootware_exc_page_fault, 14, "");
+exception_stub!(rootware_exc_timer, 32, "push 0");
+exception_stub!(rootware_exc_unexpected, 255, "push 0");
+
+unsafe extern "C" {
+    fn rootware_exc_divide();
+    fn rootware_exc_invalid_opcode();
+    fn rootware_exc_double_fault();
+    fn rootware_exc_general_protection();
+    fn rootware_exc_page_fault();
+    fn rootware_exc_timer();
+    fn rootware_exc_unexpected();
+}
+
+/// Update the kernel stack the syscall entry switches to. Must be called
+/// before entering Ring 3 for a process.
+pub fn set_entry_kernel_stack(top: u64) {
+    unsafe {
+        core::ptr::write_volatile(&raw mut KSTACK_TOP, top);
+    }
+}
+
+/// Common dispatcher for every exception and device interrupt. Called from
+/// the asm stubs with a pointer to the full frame.
+#[unsafe(no_mangle)]
+extern "C" fn rootware_exception_dispatch(frame: *mut ExceptionFrame) {
+    let frame = unsafe { &mut *frame };
+    match frame.vector {
+        32 => {
+            crate::timer::tick();
+            crate::timer::send_eoi();
+        }
+        0..=31 => handle_exception(frame),
+        _ => {
+            // Unexpected device interrupt: acknowledge and continue.
+            crate::timer::send_eoi();
+        }
+    }
+}
+
+fn handle_exception(frame: &mut ExceptionFrame) {
+    let from_user = frame.cs & 3 == 3;
+    // Double fault is unrecoverable regardless of the faulting ring.
+    let fatal = !from_user || frame.vector == 8;
+
+    if fatal {
+        crate::serial_println!("[FAULT] kernel fault (vector {})", frame.vector);
+        if frame.vector == 14 {
+            let cr2: u64;
+            unsafe {
+                core::arch::asm!("mov {}, cr2", out(reg) cr2, options(nomem, nostack));
+            }
+            crate::serial_println!("[FAULT] page fault at {:#x}", cr2);
+        }
+        crate::serial_println!(
+            "[FAULT] rip={:#x} rsp={:#x} cs={:#x} code={:#x}",
+            frame.rip,
+            frame.rsp,
+            frame.cs,
+            frame.error
+        );
+        loop {
+            unsafe {
+                core::arch::asm!("cli; hlt");
+            }
+        }
+    }
+
+    // Exception reached the kernel from Ring 3: report it, terminate the
+    // offending process and keep the system alive. Never returns.
+    crate::serial_println!(
+        "[FAULT] process {} killed (vector {})",
+        crate::process::current_id(),
+        frame.vector
+    );
+    if frame.vector == 14 {
+        let cr2: u64;
+        unsafe {
+            core::arch::asm!("mov {}, cr2", out(reg) cr2, options(nomem, nostack));
+        }
+        crate::serial_println!("[FAULT] page fault at {:#x}", cr2);
+    }
+    crate::process::kill_current();
+}
+
 /// 初始化 IDT
 pub fn init() {
     unsafe {
+        // --- syscall MSRs ---
         let lstar = rootware_syscall_entry as *const () as u64;
         core::arch::asm!(
             "wrmsr",
-            in("ecx") 0xc0000082u32,
+            in("ecx") 0xc0000082u32, // IA32_LSTAR
             in("eax") lstar as u32,
             in("edx") (lstar >> 32) as u32,
             options(nostack, preserves_flags)
         );
+        // STAR: kernel CS 0x08 / SS 0x10; user base 0x18 so sysret yields
+        // CS 0x1B and SS 0x23 (Ring 3 descriptors in the kernel GDT).
         core::arch::asm!(
             "wrmsr",
-            in("ecx") 0xc0000081u32,
+            in("ecx") 0xc0000081u32, // IA32_STAR
             in("eax") 0x0008u32,
-            in("edx") 0x000b_0008u32,
+            in("edx") 0x0018_0008u32,
+            options(nostack, preserves_flags)
+        );
+        // FMASK: clear TF on syscall entry so user code cannot single-step
+        // the kernel.
+        core::arch::asm!(
+            "wrmsr",
+            in("ecx") 0xc0000084u32, // IA32_FMASK
+            in("eax") 0x100u32,
+            in("edx") 0u32,
             options(nostack, preserves_flags)
         );
         let mut efer_low: u32;
         let mut efer_high: u32;
         core::arch::asm!(
             "rdmsr",
-            in("ecx") 0xc0000080u32,
+            in("ecx") 0xc0000080u32, // IA32_EFER
             out("eax") efer_low,
             out("edx") efer_high,
             options(nostack)
         );
-        efer_low |= 1;
+        efer_low |= 1; // SCE
         core::arch::asm!(
             "wrmsr",
             in("ecx") 0xc0000080u32,
@@ -110,17 +286,39 @@ pub fn init() {
             in("edx") efer_high,
             options(nostack, preserves_flags)
         );
-        // 设置除零异常（向量 0）
-        IDT[0] = IdtEntry::new(divide_by_zero_handler as *const () as u64, 0x08, 0x8E);
 
-        // 设置页错误（向量 14）
-        IDT[14] = IdtEntry::new(page_fault_handler as *const () as u64, 0x08, 0x8E);
+        // --- exception gates ---
+        IDT[0] = IdtEntry::new(rootware_exc_divide as *const () as u64, 0x08, 0x8E);
+        IDT[6] = IdtEntry::new(rootware_exc_invalid_opcode as *const () as u64, 0x08, 0x8E);
+        IDT[8] = IdtEntry::new(rootware_exc_double_fault as *const () as u64, 0x08, 0x8E)
+            .with_ist(1);
+        IDT[13] = IdtEntry::new(
+            rootware_exc_general_protection as *const () as u64,
+            0x08,
+            0x8E,
+        );
+        IDT[14] = IdtEntry::new(rootware_exc_page_fault as *const () as u64, 0x08, 0x8E);
 
-        // 设置双重故障（向量 8）
-        IDT[8] = IdtEntry::new(double_fault_handler as *const () as u64, 0x08, 0x8E);
-
-        // 设置时钟中断（向量 32）
-        IDT[32] = IdtEntry::new(timer_interrupt_handler as *const () as u64, 0x08, 0x8E);
+        // --- timer + catch-alls ---
+        // Every vector gets a handler so stray device interrupts and
+        // unimplemented exceptions report instead of faulting on a missing
+        // gate.
+        let unexpected = rootware_exc_unexpected as *const () as u64;
+        let table = &raw mut IDT;
+        for entry in (*table).iter_mut() {
+            *entry = IdtEntry::new(unexpected, 0x08, 0x8E);
+        }
+        IDT[0] = IdtEntry::new(rootware_exc_divide as *const () as u64, 0x08, 0x8E);
+        IDT[6] = IdtEntry::new(rootware_exc_invalid_opcode as *const () as u64, 0x08, 0x8E);
+        IDT[8] = IdtEntry::new(rootware_exc_double_fault as *const () as u64, 0x08, 0x8E)
+            .with_ist(1);
+        IDT[13] = IdtEntry::new(
+            rootware_exc_general_protection as *const () as u64,
+            0x08,
+            0x8E,
+        );
+        IDT[14] = IdtEntry::new(rootware_exc_page_fault as *const () as u64, 0x08, 0x8E);
+        IDT[32] = IdtEntry::new(rootware_exc_timer as *const () as u64, 0x08, 0x8E);
         IDT[128] = IdtEntry::new(rootware_syscall_entry as *const () as u64, 0x08, 0xEE);
 
         // 加载 IDT
@@ -135,101 +333,10 @@ pub fn init() {
             options(nostack)
         );
     }
-
-    #[unsafe(no_mangle)]
-    extern "C" fn rootware_syscall_handler(number: u64, first: u64, second: u64) -> i64 {
-        use rootware_abi::syscall::{SYS_IPC_RECEIVE, SYS_IPC_REPLY, SYS_IPC_SEND};
-        use rootware_abi::ErrorCode;
-
-        match number {
-            SYS_IPC_SEND => {
-                if first == 0 {
-                    return ErrorCode::InvalidArgument.status();
-                }
-                // User pages are mapped by the service loader before entering
-                // Ring 3. The syscall ABI uses a fixed, Copy message layout.
-                let message = unsafe { core::ptr::read(first as *const crate::ipc::Message) };
-                match crate::ipc::send(message) {
-                    Ok(()) => 0,
-                    Err(code) => code.status(),
-                }
-            }
-            SYS_IPC_RECEIVE => {
-                if second == 0 {
-                    return ErrorCode::InvalidArgument.status();
-                }
-                match crate::ipc::recv(first as u16) {
-                    Ok(message) => {
-                        unsafe {
-                            core::ptr::write(second as *mut crate::ipc::Message, message);
-                        }
-                        0
-                    }
-                    Err(code) => code.status(),
-                }
-            }
-            SYS_IPC_REPLY => {
-                if first == 0 || second == 0 {
-                    return ErrorCode::InvalidArgument.status();
-                }
-                let request = unsafe { core::ptr::read(first as *const crate::ipc::Message) };
-                if request.receiver == 0 || request.sender == 0 {
-                    return ErrorCode::InvalidArgument.status();
-                }
-                let payload = unsafe {
-                    core::ptr::read(second as *const [u8; crate::ipc::PAYLOAD_SIZE])
-                };
-                let response = crate::ipc::Message {
-                    sender: request.receiver,
-                    receiver: request.sender,
-                    message_type: request.message_type,
-                    capability: request.capability,
-                    payload,
-                };
-                match crate::ipc::send(response) {
-                    Ok(()) => 0,
-                    Err(code) => code.status(),
-                }
-            }
-            _ => ErrorCode::Unsupported.status(),
-        }
-    }
+    crate::serial_println!("[IDT] 256 vectors + syscall gate ready");
 }
 
-/// 除零异常处理
-extern "C" fn divide_by_zero_handler() {
-    unsafe {
-        core::arch::asm!("cli");
-        crate::serial_println!("[EXCEPTION] Divide by zero");
-        loop {
-            core::arch::asm!("hlt");
-        }
-    }
-}
-
-/// 页错误处理
-extern "C" fn page_fault_handler() {
-    unsafe {
-        core::arch::asm!("cli");
-        crate::serial_println!("[EXCEPTION] Page fault");
-        loop {
-            core::arch::asm!("hlt");
-        }
-    }
-}
-
-/// 双重故障处理
-extern "C" fn double_fault_handler() {
-    unsafe {
-        core::arch::asm!("cli");
-        crate::serial_println!("[EXCEPTION] Double fault");
-        loop {
-            core::arch::asm!("hlt");
-        }
-    }
-}
-/// 时钟中断处理
-extern "C" fn timer_interrupt_handler() {
-    crate::timer::tick();
-    crate::timer::send_eoi();
+#[unsafe(no_mangle)]
+extern "C" fn rootware_syscall_handler(number: u64, first: u64, second: u64) -> i64 {
+    crate::syscall::dispatch(number, first, second)
 }

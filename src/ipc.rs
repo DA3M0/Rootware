@@ -1,11 +1,18 @@
-//! Beta 3 IPC: fixed-size queues with configurable rules and capabilities.
+//! IPC: per-receiver message queues with configurable rules and
+//! capabilities.
+//!
+//! Every receiver owns a bounded queue, so a slow consumer can no longer
+//! block delivery to another receiver (the Beta single-ring limitation).
+//! Delivering a message wakes one process blocked on that receiver.
+
+use alloc::collections::{BTreeMap, vec_deque::VecDeque};
 
 pub use rootware_abi::ipc::{message_type, Message, RouteRule, BROADCAST_RECEIVER, PAYLOAD_SIZE};
 
 use rootware_abi::ErrorCode;
 
 use crate::capability::{self, Capability};
-pub const MSG_CAPACITY: usize = 8;
+pub const QUEUE_CAPACITY: usize = 16;
 pub const MAX_PERMISSION_RULES: usize = 8;
 pub const MAX_ROUTE_RULES: usize = 8;
 
@@ -118,6 +125,14 @@ const DEFAULT_PERMISSIONS: PermissionConfig = PermissionConfig::with_rules(&[
             id: capability::IPC_SEND_CAPABILITY,
         },
     },
+    // Replies: the echo service answers the client.
+    PermissionRule {
+        sender: 2,
+        receiver: 1,
+        capability: Capability {
+            id: capability::IPC_SEND_CAPABILITY,
+        },
+    },
 ]);
 const DEFAULT_ROUTES: RouteConfig = RouteConfig::with_rules(&[
     RouteRule {
@@ -142,12 +157,19 @@ const DEFAULT_ROUTES: RouteConfig = RouteConfig::with_rules(&[
     },
 ]);
 
-static mut QUEUE: [Option<Message>; MSG_CAPACITY] = [None; MSG_CAPACITY];
-static mut HEAD: usize = 0;
-static mut TAIL: usize = 0;
-static mut COUNT: usize = 0;
+static mut QUEUES: Option<BTreeMap<u16, VecDeque<Message>>> = None;
 static mut PERMISSIONS: PermissionConfig = DEFAULT_PERMISSIONS;
 static mut ROUTES: RouteConfig = DEFAULT_ROUTES;
+
+unsafe fn queues() -> &'static mut BTreeMap<u16, VecDeque<Message>> {
+    unsafe {
+        let slot = &raw mut QUEUES;
+        if (*slot).is_none() {
+            (*slot) = Some(BTreeMap::new());
+        }
+        (*slot).as_mut().expect("ipc queues initialized")
+    }
+}
 
 fn allowed(message: &Message, receiver: u16) -> bool {
     unsafe {
@@ -218,48 +240,39 @@ pub fn send(message: Message) -> Result<(), ErrorCode> {
             return Err(ErrorCode::PermissionDenied);
         }
     }
+
+    // All-or-nothing admission: every target queue must have room before
+    // the first message is enqueued.
     unsafe {
-        if COUNT + target_count > MSG_CAPACITY {
-            audit(&message, message.receiver, 0);
-            return Err(ErrorCode::QueueFull);
+        let queues = queues();
+        for receiver in &targets[..target_count] {
+            if queues
+                .get(receiver)
+                .is_some_and(|queue| queue.len() >= QUEUE_CAPACITY)
+            {
+                audit(&message, *receiver, 0);
+                return Err(ErrorCode::QueueFull);
+            }
         }
         for receiver in &targets[..target_count] {
             let mut routed = message;
             routed.receiver = *receiver;
-            let tail = TAIL;
-            (*(&raw mut QUEUE))[tail] = Some(routed);
-            TAIL = (tail + 1) % MSG_CAPACITY;
-            COUNT += 1;
+            queues.entry(*receiver).or_default().push_back(routed);
             audit(&message, *receiver, 1);
         }
     }
-    crate::serial_println!(
-        "[IPC] message routed: type {} to {} recipient(s)",
-        message.message_type,
-        target_count
-    );
+    for receiver in &targets[..target_count] {
+        crate::process::wake_receiver(*receiver);
+    }
     Ok(())
 }
 
 pub fn recv(receiver: u16) -> Result<Message, ErrorCode> {
     unsafe {
-        if COUNT == 0 || (*(&raw const QUEUE))[HEAD].is_none() {
-            return Err(ErrorCode::QueueEmpty);
-        }
-        let message = (*(&raw mut QUEUE))[HEAD].take();
-        match message {
-            Some(msg) if msg.receiver == receiver => {
-                HEAD = (HEAD + 1) % MSG_CAPACITY;
-                COUNT -= 1;
-                Ok(msg)
-            }
-            other => {
-                // Head belongs to another receiver; put it back. A per-receiver
-                // queue replaces this head-of-line blocking path in 1.0.
-                (*(&raw mut QUEUE))[HEAD] = other;
-                Err(ErrorCode::QueueEmpty)
-            }
-        }
+        queues()
+            .get_mut(&receiver)
+            .and_then(|queue| queue.pop_front())
+            .ok_or(ErrorCode::QueueEmpty)
     }
 }
 
