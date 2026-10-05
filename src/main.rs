@@ -1,11 +1,16 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_main)]
+
+// Kernel entry point, called from `boot.asm` with the Multiboot2
+// information address in the first argument. Under host tests the
+// hardware bring-up is skipped and only the kernel logic is compiled.
 
 mod gdt;
 mod capability;
 mod audit;
 mod idt;
 mod memory;
+#[cfg(not(test))]
 mod panic;
 mod serial;
 mod timer;
@@ -14,6 +19,7 @@ mod scheduler;
 mod ipc;
 mod service;
 
+#[cfg(not(test))]
 #[unsafe(no_mangle)]
 pub extern "C" fn rust_start(mb_info: u64) -> ! {
     serial::init();

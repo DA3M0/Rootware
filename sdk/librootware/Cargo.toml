@@ -5,6 +5,9 @@ edition = "2024"
 description = "Userspace Rust SDK for the Rootware kernel ABI"
 license = "Apache-2.0"
 
+[dependencies]
+rootware-abi = { path = "../../abi" }
+
 [features]
 default = ["std"]
 std = []

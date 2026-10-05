@@ -102,7 +102,7 @@ extern "C" fn task_a() -> ! {
 extern "C" fn task_b() -> ! {
     loop {
         crate::serial_println!("[SCHED] task B running");
-        if crate::ipc::recv(2).is_some() {
+        if crate::ipc::recv(2).is_ok() {
             crate::serial_println!("[IPC] task B received: hello from A");
             if ROUNDS.fetch_add(1, Ordering::Relaxed) >= 2 {
                 crate::service::init();

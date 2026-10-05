@@ -2,3 +2,4 @@
 /iso
 /rootware.iso
 *.o
+.zcode/

@@ -5,15 +5,10 @@
 //! The kernel returns zero on success and a negative [`ErrorCode`] value on
 //! failure.
 
+use rootware_abi::syscall::{SYS_IPC_RECEIVE, SYS_IPC_REPLY, SYS_IPC_SEND};
+
 use crate::error::{Error, ErrorCode, Result};
 use crate::ipc::{Message, Transport, PAYLOAD_SIZE};
-
-/// Send an IPC message.
-pub const SYS_IPC_SEND: u64 = 1;
-/// Receive an IPC message for a service.
-pub const SYS_IPC_RECEIVE: u64 = 2;
-/// Reply to an IPC request.
-pub const SYS_IPC_REPLY: u64 = 3;
 
 /// Transport that delegates IPC operations to the Rootware kernel.
 ///
@@ -31,21 +26,10 @@ impl SyscallTransport {
 
 #[cfg(all(target_os = "none", target_arch = "x86_64"))]
 fn status_result(status: i64) -> Result<()> {
-    if status == 0 {
-        return Ok(());
+    match ErrorCode::from_status(status) {
+        None => Ok(()),
+        Some(code) => Err(Error::new(code)),
     }
-
-    let code = if status < 0 { -status } else { status };
-    let error = match code as u32 {
-        1 => ErrorCode::InvalidArgument,
-        2 => ErrorCode::PermissionDenied,
-        3 => ErrorCode::QueueFull,
-        4 => ErrorCode::QueueEmpty,
-        5 => ErrorCode::NotFound,
-        6 => ErrorCode::Unsupported,
-        _ => ErrorCode::Transport,
-    };
-    Err(Error::new(error))
 }
 
 #[cfg(all(target_os = "none", target_arch = "x86_64"))]

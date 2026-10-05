@@ -5,7 +5,9 @@ edition = "2024"
 build = "build.rs"
 
 [dependencies]
+rootware-abi = { path = "abi" }
 
 [workspace]
-members = [".", "sdk/librootware"]
+members = [".", "abi", "sdk/librootware", "sdk/simulator"]
 resolver = "2"
+

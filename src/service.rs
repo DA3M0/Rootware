@@ -21,7 +21,7 @@ static SERVICE: UserServiceAbi = UserServiceAbi {
 };
 
 pub fn init() -> ! {
-    crate::serial_println!("[BETA] ABI v3 ready");
+    crate::serial_println!("[BETA] ABI v4 ready");
     crate::vmem::map_page(USER_CODE, CODE_PHYS, crate::vmem::USER | crate::vmem::WRITABLE)
         .expect("user code map failed");
     crate::vmem::map_page(USER_STACK, STACK_PHYS, crate::vmem::USER | crate::vmem::WRITABLE)

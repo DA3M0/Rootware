@@ -1,29 +1,13 @@
 //! Beta 3 IPC: fixed-size queues with configurable rules and capabilities.
 
+pub use rootware_abi::ipc::{message_type, Message, RouteRule, BROADCAST_RECEIVER, PAYLOAD_SIZE};
+
+use rootware_abi::ErrorCode;
+
 use crate::capability::{self, Capability};
-pub const PAYLOAD_SIZE: usize = 32;
 pub const MSG_CAPACITY: usize = 8;
 pub const MAX_PERMISSION_RULES: usize = 8;
 pub const MAX_ROUTE_RULES: usize = 8;
-pub const BROADCAST_RECEIVER: u16 = u16::MAX;
-pub const ABI_VERSION: u32 = 3;
-
-pub mod message_type {
-    pub const REQUEST: u16 = 1;
-    pub const RESPONSE: u16 = 2;
-    pub const EVENT: u16 = 3;
-    pub const BROADCAST: u16 = 4;
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct Message {
-    pub sender: u16,
-    pub receiver: u16,
-    pub message_type: u16,
-    pub capability: Capability,
-    pub payload: [u8; PAYLOAD_SIZE],
-}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,13 +22,6 @@ pub struct PermissionRule {
 pub struct PermissionConfig {
     pub rules: [PermissionRule; MAX_PERMISSION_RULES],
     pub count: u16,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct RouteRule {
-    pub message_type: u16,
-    pub receiver: u16,
 }
 
 #[repr(C)]
@@ -197,45 +174,54 @@ pub fn load_routes(config: &RouteConfig) {
     crate::serial_println!("[IPC] route table loaded");
 }
 
-pub fn send(message: Message) -> Result<(), ()> {
+fn audit(message: &Message, receiver: u16, result: u16) {
+    crate::audit::record(crate::audit::AuditEntry {
+        timestamp: crate::timer::ticks(),
+        sender: message.sender,
+        receiver,
+        message_type: message.message_type,
+        result,
+        capability: message.capability.id,
+    });
+}
+
+pub fn send(message: Message) -> Result<(), ErrorCode> {
     let mut targets = [0; MAX_ROUTE_RULES];
     let target_count = unsafe {
         (&*(&raw const ROUTES)).targets(message.message_type, message.receiver, &mut targets)
     };
-    if target_count == 0 || !capability_allowed(&message) {
-        crate::audit::record(crate::audit::AuditEntry {
-            timestamp: crate::timer::ticks(),
-            sender: message.sender,
-            receiver: message.receiver,
-            message_type: message.message_type,
-            result: 0,
-            capability: message.capability.id,
-        });
+    if !capability_allowed(&message) {
+        for receiver in &targets[..target_count] {
+            audit(&message, *receiver, 0);
+        }
+        crate::serial_println!(
+            "[IPC] capability denied: sender {} lacks capability {}",
+            message.sender,
+            message.capability.id
+        );
+        return Err(ErrorCode::PermissionDenied);
+    }
+    if target_count == 0 {
+        audit(&message, message.receiver, 0);
         crate::serial_println!("[IPC] route denied: type {}", message.message_type);
-        return Err(());
+        return Err(ErrorCode::NotFound);
     }
     for receiver in &targets[..target_count] {
         if !allowed(&message, *receiver) {
+            audit(&message, *receiver, 0);
             crate::serial_println!(
                 "[IPC] permission denied: {} -> {} (capability {})",
                 message.sender,
                 receiver,
                 message.capability.id
             );
-            crate::audit::record(crate::audit::AuditEntry {
-                timestamp: crate::timer::ticks(),
-                sender: message.sender,
-                receiver: *receiver,
-                message_type: message.message_type,
-                result: 0,
-                capability: message.capability.id,
-            });
-            return Err(());
+            return Err(ErrorCode::PermissionDenied);
         }
     }
     unsafe {
         if COUNT + target_count > MSG_CAPACITY {
-            return Err(());
+            audit(&message, message.receiver, 0);
+            return Err(ErrorCode::QueueFull);
         }
         for receiver in &targets[..target_count] {
             let mut routed = message;
@@ -244,14 +230,7 @@ pub fn send(message: Message) -> Result<(), ()> {
             (*(&raw mut QUEUE))[tail] = Some(routed);
             TAIL = (tail + 1) % MSG_CAPACITY;
             COUNT += 1;
-            crate::audit::record(crate::audit::AuditEntry {
-                timestamp: crate::timer::ticks(),
-                sender: message.sender,
-                receiver: *receiver,
-                message_type: message.message_type,
-                result: 1,
-                capability: message.capability.id,
-            });
+            audit(&message, *receiver, 1);
         }
     }
     crate::serial_println!(
@@ -262,18 +241,25 @@ pub fn send(message: Message) -> Result<(), ()> {
     Ok(())
 }
 
-pub fn recv(receiver: u16) -> Option<Message> {
+pub fn recv(receiver: u16) -> Result<Message, ErrorCode> {
     unsafe {
         if COUNT == 0 || (*(&raw const QUEUE))[HEAD].is_none() {
-            return None;
+            return Err(ErrorCode::QueueEmpty);
         }
         let message = (*(&raw mut QUEUE))[HEAD].take();
-        if message.is_some_and(|msg| msg.receiver != receiver) {
-            return None;
+        match message {
+            Some(msg) if msg.receiver == receiver => {
+                HEAD = (HEAD + 1) % MSG_CAPACITY;
+                COUNT -= 1;
+                Ok(msg)
+            }
+            other => {
+                // Head belongs to another receiver; put it back. A per-receiver
+                // queue replaces this head-of-line blocking path in 1.0.
+                (*(&raw mut QUEUE))[HEAD] = other;
+                Err(ErrorCode::QueueEmpty)
+            }
         }
-        HEAD = (HEAD + 1) % MSG_CAPACITY;
-        COUNT -= 1;
-        message
     }
 }
 

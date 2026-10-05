@@ -1,14 +1,9 @@
 //! Beta 3 fixed-size capability registry.
 
-pub const MAX_CAPABILITY_HOLDERS: usize = 8;
-pub const INVALID_CAPABILITY: u32 = 0;
-pub const IPC_SEND_CAPABILITY: u32 = 1;
+pub use rootware_abi::capability::{capability_kind, Capability, INVALID_CAPABILITY};
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Capability {
-    pub id: u32,
-}
+pub const MAX_CAPABILITY_HOLDERS: usize = 8;
+pub const IPC_SEND_CAPABILITY: u32 = capability_kind::IPC_SEND;
 
 #[repr(C)]
 #[derive(Clone, Copy)]

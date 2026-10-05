@@ -12,9 +12,7 @@ pub mod log;
 pub mod service;
 pub mod syscall;
 
-pub use error::{Error, ErrorCode, Result};
+pub use error::{Error, Result};
 pub use ipc::{Message, Transport};
+pub use rootware_abi::{ABI_VERSION, ErrorCode};
 pub use syscall::SyscallTransport;
-
-/// ABI version implemented by this SDK.
-pub const ABI_VERSION: u32 = 3;

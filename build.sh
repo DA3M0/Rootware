@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
+# Prefer the rustup toolchain: the bare-metal target's rust-std lives there.
+export PATH="$HOME/.cargo/bin:$PATH"
+
 RELEASE_DIR="target/x86_64-unknown-none/release"
 KERNEL_ELF="$RELEASE_DIR/rootware"
 ISO_DIR="iso"
 
 echo "==> Building kernel..."
-cargo build --release
+cargo build --release --target x86_64-unknown-none -p rootware
 
 echo "==> Creating ISO..."
 rm -rf "$ISO_DIR"

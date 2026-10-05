@@ -138,41 +138,43 @@ pub fn init() {
 
     #[unsafe(no_mangle)]
     extern "C" fn rootware_syscall_handler(number: u64, first: u64, second: u64) -> i64 {
-        const IPC_SEND: u64 = 1;
-        const IPC_RECEIVE: u64 = 2;
-        const IPC_REPLY: u64 = 3;
+        use rootware_abi::syscall::{SYS_IPC_RECEIVE, SYS_IPC_REPLY, SYS_IPC_SEND};
+        use rootware_abi::ErrorCode;
 
         match number {
-            IPC_SEND => {
+            SYS_IPC_SEND => {
                 if first == 0 {
-                    return -1;
+                    return ErrorCode::InvalidArgument.status();
                 }
                 // User pages are mapped by the service loader before entering
                 // Ring 3. The syscall ABI uses a fixed, Copy message layout.
                 let message = unsafe { core::ptr::read(first as *const crate::ipc::Message) };
-                crate::ipc::send(message).map_or(-7, |_| 0)
+                match crate::ipc::send(message) {
+                    Ok(()) => 0,
+                    Err(code) => code.status(),
+                }
             }
-            IPC_RECEIVE => {
+            SYS_IPC_RECEIVE => {
                 if second == 0 {
-                    return -1;
+                    return ErrorCode::InvalidArgument.status();
                 }
                 match crate::ipc::recv(first as u16) {
-                    Some(message) => {
+                    Ok(message) => {
                         unsafe {
                             core::ptr::write(second as *mut crate::ipc::Message, message);
                         }
                         0
                     }
-                    None => -4,
+                    Err(code) => code.status(),
                 }
             }
-            IPC_REPLY => {
+            SYS_IPC_REPLY => {
                 if first == 0 || second == 0 {
-                    return -1;
+                    return ErrorCode::InvalidArgument.status();
                 }
                 let request = unsafe { core::ptr::read(first as *const crate::ipc::Message) };
                 if request.receiver == 0 || request.sender == 0 {
-                    return -1;
+                    return ErrorCode::InvalidArgument.status();
                 }
                 let payload = unsafe {
                     core::ptr::read(second as *const [u8; crate::ipc::PAYLOAD_SIZE])
@@ -184,9 +186,12 @@ pub fn init() {
                     capability: request.capability,
                     payload,
                 };
-                crate::ipc::send(response).map_or(-7, |_| 0)
+                match crate::ipc::send(response) {
+                    Ok(()) => 0,
+                    Err(code) => code.status(),
+                }
             }
-            _ => -6,
+            _ => ErrorCode::Unsupported.status(),
         }
     }
 }
