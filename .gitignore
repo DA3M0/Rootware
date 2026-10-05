@@ -3,3 +3,6 @@
 /rootware.iso
 *.o
 .zcode/
+
+# user program build artifacts
+user/*/target/

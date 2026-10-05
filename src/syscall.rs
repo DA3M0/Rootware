@@ -62,13 +62,17 @@ const CAP_WHITELIST: [(u16, u32); 1] = [(1, capability_kind::IPC_SEND)];
 pub fn dispatch(number: u64, first: u64, second: u64) -> i64 {
     match number {
         SYS_IPC_SEND => match user_read::<Message>(first) {
-            Ok(message) => match ipc::send(message) {
-                Ok(()) => 0,
-                Err(code) => code.status(),
-            },
+            // The kernel, not the caller, owns the sender identity.
+            Ok(mut message) => {
+                message.sender = crate::process::current_id();
+                match ipc::send(message) {
+                    Ok(()) => 0,
+                    Err(code) => code.status(),
+                }
+            }
             Err(code) => code.status(),
         },
-        SYS_IPC_RECEIVE => match receive_blocking(first as u16) {
+        SYS_IPC_RECEIVE => match receive_pid(first) {
             Ok(message) => match user_write(second, message) {
                 Ok(()) => 0,
                 Err(code) => code.status(),
@@ -97,9 +101,15 @@ pub fn dispatch(number: u64, first: u64, second: u64) -> i64 {
     }
 }
 
-/// Blocking receive: park the process when its queue is empty and retry
-/// after being woken by a matching send.
-fn receive_blocking(receiver: u16) -> Result<Message, ErrorCode> {
+/// Blocking receive, bound to the caller's own queue. The requested
+/// receiver id must match the caller's process id, so one process can
+/// never read another process's messages.
+fn receive_pid(requested: u64) -> Result<Message, ErrorCode> {
+    let pid = crate::process::current_id();
+    if requested != pid as u64 {
+        return Err(ErrorCode::PermissionDenied);
+    }
+    let receiver = pid;
     loop {
         match ipc::recv(receiver) {
             Ok(message) => return Ok(message),
@@ -115,10 +125,12 @@ fn reply(request_ptr: u64, payload_ptr: u64) -> Result<(), ErrorCode> {
         return Err(ErrorCode::InvalidArgument);
     }
     let payload: [u8; ipc::PAYLOAD_SIZE] = user_read(payload_ptr)?;
+    // Replies always originate from the calling process and carry the
+    // RESPONSE type so the router sends them back to the requester.
     let response = Message {
-        sender: request.receiver,
+        sender: crate::process::current_id(),
         receiver: request.sender,
-        message_type: request.message_type,
+        message_type: rootware_abi::ipc::message_type::RESPONSE,
         capability: request.capability,
         payload,
     };

@@ -380,13 +380,8 @@ pub fn init_and_run() -> ! {
     let client = crate::memory::find_module("ipc-client").is_some();
     let hello = crate::memory::find_module("hello").is_some();
 
-    if hello {
-        if let Some(pid) = lowest_free_pid() {
-            if let Err(error) = spawn_user_by_name("hello", pid) {
-                crate::serial_println!("[PROC] hello spawn failed: {:?}", error);
-            }
-        }
-    }
+    // Boot pids are pinned by the default permission table: the client is
+    // pid 1, the echo service is pid 2. Anything else spawns after them.
     if echo {
         match spawn_user_by_name("echo-service", 2) {
             Ok(()) => {}
@@ -397,6 +392,14 @@ pub fn init_and_run() -> ! {
         match spawn_user_by_name("ipc-client", 1) {
             Ok(()) => {}
             Err(error) => crate::serial_println!("[PROC] client spawn failed: {:?}", error),
+        }
+    }
+
+    if hello {
+        if let Some(pid) = lowest_free_pid() {
+            if let Err(error) = spawn_user_by_name("hello", pid) {
+                crate::serial_println!("[PROC] hello spawn failed: {:?}", error);
+            }
         }
     }
 

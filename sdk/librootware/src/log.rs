@@ -11,7 +11,10 @@ pub fn log_args(level: Level, args: core::fmt::Arguments<'_>) {
     #[cfg(feature = "std")]
     eprintln!("[ROOTWARE/{level:?}] {args}");
     #[cfg(not(feature = "std"))]
-    { let _ = (level, args); }
+    {
+        let _ = level;
+        crate::console::print_line(args);
+    }
 }
 
 #[macro_export]

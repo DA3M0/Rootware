@@ -14,16 +14,30 @@ global_asm!(
     // The `syscall` instruction leaves rsp on the user stack and clobbers
     // only rcx (return rip) and r11 (rflags). Stash those two on the user
     // stack, bridge the user rsp through a static, then switch to the
-    // current process's kernel stack.
+    // current process's kernel stack. Every register the kernel handler
+    // may clobber (SysV caller-saved: rdi/rsi/rdx/r8-r11) is saved around
+    // the call so the user keeps its register state across syscalls.
     "push rcx",                         // user stack: return rip
     "push r11",                         // user stack: rflags
     "mov [rip + KSTACK_SAVE], rsp",     // remember user rsp
     "mov rsp, [rip + KSTACK_TOP]",      // switch to the kernel stack
     "push qword ptr [rip + KSTACK_SAVE]",
+    "push rdi",
+    "push rsi",
+    "push rdx",
+    "push r8",
+    "push r9",
+    "push r10",
     "mov rdx, rsi",
     "mov rsi, rdi",
     "mov rdi, rax",
     "call rootware_syscall_handler",
+    "pop r10",
+    "pop r9",
+    "pop r8",
+    "pop rdx",
+    "pop rsi",
+    "pop rdi",
     "pop rsp",                          // back to the user stack
     "pop r11",                          // rflags
     "pop rcx",                          // return rip

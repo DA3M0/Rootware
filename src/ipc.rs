@@ -264,6 +264,11 @@ pub fn send(message: Message) -> Result<(), ErrorCode> {
     for receiver in &targets[..target_count] {
         crate::process::wake_receiver(*receiver);
     }
+    crate::serial_println!(
+        "[IPC] message routed: type {} to {} recipient(s)",
+        message.message_type,
+        target_count
+    );
     Ok(())
 }
 

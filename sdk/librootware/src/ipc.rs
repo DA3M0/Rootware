@@ -76,7 +76,7 @@ impl Transport for InMemoryTransport {
         self.send(Message::new(
             request.receiver,
             request.sender,
-            request.message_type,
+            message_type::RESPONSE,
             request.capability,
             payload,
         ))

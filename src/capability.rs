@@ -56,8 +56,17 @@ pub fn init() {
     unsafe {
         GRANTS = [None; MAX_CAPABILITY_HOLDERS];
     }
+    // Boot policy: the client slot (1) and the system service slot (2) may
+    // send and answer IPC requests. Acquirement beyond that goes through
+    // SYS_CAP_REQUEST against the kernel whitelist.
     let _ = grant(
         1,
+        Capability {
+            id: IPC_SEND_CAPABILITY,
+        },
+    );
+    let _ = grant(
+        2,
         Capability {
             id: IPC_SEND_CAPABILITY,
         },

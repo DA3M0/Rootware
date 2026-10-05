@@ -9,5 +9,6 @@ rootware-abi = { path = "abi" }
 
 [workspace]
 members = [".", "abi", "sdk/librootware", "sdk/simulator"]
+exclude = ["user/hello", "user/echo-service", "user/ipc-client"]
 resolver = "2"
 

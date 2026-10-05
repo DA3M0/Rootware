@@ -24,21 +24,15 @@ impl SyscallTransport {
     }
 }
 
+/// Raw syscall: `Ok(status)` carries non-negative results (data such as
+/// versions or pids), `Err` decodes negative statuses into [`ErrorCode`].
 #[cfg(all(target_os = "none", target_arch = "x86_64"))]
-fn status_result(status: i64) -> Result<()> {
-    match ErrorCode::from_status(status) {
-        None => Ok(()),
-        Some(code) => Err(Error::new(code)),
-    }
-}
-
-#[cfg(all(target_os = "none", target_arch = "x86_64"))]
-unsafe fn invoke(number: u64, first: u64, second: u64) -> i64 {
-    let result: i64;
+pub(crate) unsafe fn invoke_raw(number: u64, first: u64, second: u64) -> Result<i64> {
+    let status: i64;
     unsafe {
         core::arch::asm!(
             "syscall",
-            inlateout("rax") number as i64 => result,
+            inlateout("rax") number as i64 => status,
             in("rdi") first,
             in("rsi") second,
             lateout("rcx") _,
@@ -46,11 +40,14 @@ unsafe fn invoke(number: u64, first: u64, second: u64) -> i64 {
             options(nostack)
         );
     }
-    result
+    match ErrorCode::from_status(status) {
+        None => Ok(status),
+        Some(code) => Err(Error::new(code)),
+    }
 }
 
 #[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
-fn unsupported<T>() -> Result<T> {
+pub(crate) unsafe fn invoke_raw(_number: u64, _first: u64, _second: u64) -> Result<i64> {
     Err(Error::new(ErrorCode::Unsupported))
 }
 
@@ -59,14 +56,15 @@ impl Transport for SyscallTransport {
         #[cfg(all(target_os = "none", target_arch = "x86_64"))]
         {
             // SAFETY: `message` remains live for the duration of the syscall.
-            return status_result(unsafe {
-                invoke(SYS_IPC_SEND, (&message as *const Message) as u64, 0)
-            });
+            return unsafe {
+                invoke_raw(SYS_IPC_SEND, (&message as *const Message) as u64, 0)
+            }
+            .map(|_| ());
         }
         #[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
         {
             let _ = message;
-            unsupported()
+            Err(Error::new(ErrorCode::Unsupported))
         }
     }
 
@@ -81,19 +79,20 @@ impl Transport for SyscallTransport {
                 [0; PAYLOAD_SIZE],
             );
             // SAFETY: `message` is writable and remains live for the syscall.
-            status_result(unsafe {
-                invoke(
+            // On Rootware this blocks the process until a message arrives.
+            unsafe {
+                invoke_raw(
                     SYS_IPC_RECEIVE,
                     receiver as u64,
                     (&mut message as *mut Message) as u64,
-                )
-            })?;
+                )?;
+            }
             Ok(message)
         }
         #[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
         {
             let _ = receiver;
-            unsupported()
+            Err(Error::new(ErrorCode::Unsupported))
         }
     }
 
@@ -105,18 +104,19 @@ impl Transport for SyscallTransport {
         #[cfg(all(target_os = "none", target_arch = "x86_64"))]
         {
             // SAFETY: both values remain live for the duration of the syscall.
-            return status_result(unsafe {
-                invoke(
+            return unsafe {
+                invoke_raw(
                     SYS_IPC_REPLY,
                     (request as *const Message) as u64,
                     (&payload as *const [u8; PAYLOAD_SIZE]) as u64,
                 )
-            });
+            }
+            .map(|_| ());
         }
         #[cfg(not(all(target_os = "none", target_arch = "x86_64")))]
         {
             let _ = payload;
-            unsupported()
+            Err(Error::new(ErrorCode::Unsupported))
         }
     }
 }
