@@ -15,6 +15,7 @@ const APIC_BASE: u64 = 0xFEE00000;
 /// APIC 寄存器偏移
 const APIC_LVT_TIMER: u64 = 0x320;
 const APIC_TIMER_INIT_COUNT: u64 = 0x380;
+#[allow(dead_code)] // part of the documented APIC register map
 const APIC_TIMER_CURRENT_COUNT: u64 = 0x390;
 const APIC_TIMER_DIVIDE: u64 = 0x3E0;
 const APIC_EOI: u64 = 0xB0;

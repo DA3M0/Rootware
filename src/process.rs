@@ -199,7 +199,7 @@ pub fn spawn_user_by_name(name: &str, pid: u16) -> Result<(), ErrorCode> {
             stack_top,
             waiting_for: 0,
         };
-        prepare_context(slot, user_entry_trampoline as usize);
+        prepare_context(slot, user_entry_trampoline as *const () as usize);
     }
     crate::serial_println!(
         "[PROC] spawned '{}' as pid {} (entry {:#x})",

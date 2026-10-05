@@ -5,6 +5,7 @@
 //! The kernel returns zero on success and a negative [`ErrorCode`] value on
 //! failure.
 
+#[cfg(all(target_os = "none", target_arch = "x86_64"))]
 use rootware_abi::syscall::{SYS_IPC_RECEIVE, SYS_IPC_REPLY, SYS_IPC_SEND};
 
 use crate::error::{Error, ErrorCode, Result};

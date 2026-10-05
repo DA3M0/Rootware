@@ -302,16 +302,16 @@ pub fn init() {
         );
 
         // --- exception gates ---
-        IDT[0] = IdtEntry::new(rootware_exc_divide as *const () as u64, 0x08, 0x8E);
-        IDT[6] = IdtEntry::new(rootware_exc_invalid_opcode as *const () as u64, 0x08, 0x8E);
-        IDT[8] = IdtEntry::new(rootware_exc_double_fault as *const () as u64, 0x08, 0x8E)
+        IDT[0] = IdtEntry::new(rootware_exc_divide as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
+        IDT[6] = IdtEntry::new(rootware_exc_invalid_opcode as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
+        IDT[8] = IdtEntry::new(rootware_exc_double_fault as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E)
             .with_ist(1);
         IDT[13] = IdtEntry::new(
             rootware_exc_general_protection as *const () as u64,
             0x08,
             0x8E,
         );
-        IDT[14] = IdtEntry::new(rootware_exc_page_fault as *const () as u64, 0x08, 0x8E);
+        IDT[14] = IdtEntry::new(rootware_exc_page_fault as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
 
         // --- timer + catch-alls ---
         // Every vector gets a handler so stray device interrupts and
@@ -320,20 +320,20 @@ pub fn init() {
         let unexpected = rootware_exc_unexpected as *const () as u64;
         let table = &raw mut IDT;
         for entry in (*table).iter_mut() {
-            *entry = IdtEntry::new(unexpected, 0x08, 0x8E);
+            *entry = IdtEntry::new(unexpected, crate::gdt::KERNEL_CODE, 0x8E);
         }
-        IDT[0] = IdtEntry::new(rootware_exc_divide as *const () as u64, 0x08, 0x8E);
-        IDT[6] = IdtEntry::new(rootware_exc_invalid_opcode as *const () as u64, 0x08, 0x8E);
-        IDT[8] = IdtEntry::new(rootware_exc_double_fault as *const () as u64, 0x08, 0x8E)
+        IDT[0] = IdtEntry::new(rootware_exc_divide as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
+        IDT[6] = IdtEntry::new(rootware_exc_invalid_opcode as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
+        IDT[8] = IdtEntry::new(rootware_exc_double_fault as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E)
             .with_ist(1);
         IDT[13] = IdtEntry::new(
             rootware_exc_general_protection as *const () as u64,
             0x08,
             0x8E,
         );
-        IDT[14] = IdtEntry::new(rootware_exc_page_fault as *const () as u64, 0x08, 0x8E);
-        IDT[32] = IdtEntry::new(rootware_exc_timer as *const () as u64, 0x08, 0x8E);
-        IDT[128] = IdtEntry::new(rootware_syscall_entry as *const () as u64, 0x08, 0xEE);
+        IDT[14] = IdtEntry::new(rootware_exc_page_fault as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
+        IDT[32] = IdtEntry::new(rootware_exc_timer as *const () as u64, crate::gdt::KERNEL_CODE, 0x8E);
+        IDT[128] = IdtEntry::new(rootware_syscall_entry as *const () as u64, crate::gdt::KERNEL_CODE, 0xEE);
 
         // 加载 IDT
         let idt_ptr = IdtPointer {

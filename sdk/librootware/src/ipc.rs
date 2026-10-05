@@ -1,5 +1,6 @@
 pub use rootware_abi::ipc::{message_type, Message, RouteRule, BROADCAST_RECEIVER, PAYLOAD_SIZE};
 
+#[cfg(all(test, feature = "std"))]
 use crate::capability::Capability;
 use crate::error::Result;
 #[cfg(feature = "std")]

@@ -8,10 +8,15 @@
 use core::mem::size_of;
 use core::ptr::write_volatile;
 
+/// Kernel code segment selector (GDT entry 1).
 pub const KERNEL_CODE: u16 = 0x08;
+/// Kernel data segment selector (GDT entry 2).
 pub const KERNEL_DATA: u16 = 0x10;
+/// User code segment selector (GDT entry 3, RPL 0 inside sysret STAR).
 pub const USER_CODE: u16 = 0x1B;
+/// User data segment selector (GDT entry 4).
 pub const USER_DATA: u16 = 0x23;
+/// TSS selector (GDT entry 5).
 pub const TSS_SELECTOR: u16 = 0x28;
 
 /// 16 KiB IST stack for the double fault handler.
@@ -55,18 +60,6 @@ impl Tss {
 }
 
 #[repr(C, align(16))]
-struct TssDescriptor {
-    limit_low: u16,
-    base_low: u16,
-    base_middle: u8,
-    type_attr: u8,
-    granularity: u8,
-    base_high: u8,
-    base_top: u32,
-    reserved: u32,
-}
-
-#[repr(C, align(16))]
 struct Gdt {
     null: Entry,
     kernel_code: Entry,
@@ -100,7 +93,7 @@ static mut IST_STACK: [u8; IST_SIZE] = [0; IST_SIZE];
 
 /// Top of the double-fault IST stack.
 pub fn ist_top() -> u64 {
-    unsafe { (&raw const IST_STACK as u64) + IST_SIZE as u64 }
+    (&raw const IST_STACK as u64) + IST_SIZE as u64
 }
 
 /// Point RSP0 (and the syscall-entry kernel stack) at a new kernel stack.

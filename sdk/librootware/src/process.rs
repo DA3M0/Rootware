@@ -1,7 +1,9 @@
 //! Process lifecycle syscalls.
 
 use crate::error::{Error, ErrorCode, Result};
-use rootware_abi::syscall::{SYS_EXIT, SYS_SPAWN};
+#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+use rootware_abi::syscall::SYS_EXIT;
+use rootware_abi::syscall::SYS_SPAWN;
 
 /// Terminates the calling process with `code`. Never returns on Rootware;
 /// on other targets this panics, mirroring a `std` process without an OS.

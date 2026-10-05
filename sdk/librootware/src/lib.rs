@@ -44,8 +44,11 @@ core::arch::global_asm! {
     sys_exit = const rootware_abi::syscall::SYS_EXIT,
 }
 
+// The symbol crt0 calls; declared to pin its type. The declaration
+// itself is only referenced from the entry shim above.
 #[cfg(all(target_os = "none", target_arch = "x86_64"))]
 unsafe extern "C" {
+    #[allow(dead_code)]
     fn rootware_main() -> i32;
 }
 

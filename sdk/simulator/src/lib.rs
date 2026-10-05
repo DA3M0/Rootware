@@ -1,5 +1,6 @@
 //! Linux-hosted simulator primitives for SDK integration tests.
 
+#[cfg(test)]
 use librootware::capability::Capability;
 use librootware::ipc::{InMemoryTransport, Message, Transport};
 

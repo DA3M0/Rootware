@@ -3,7 +3,10 @@
 
 // Kernel entry point, called from `boot.asm` with the Multiboot2
 // information address in the first argument. Under host tests the
-// hardware bring-up is skipped and only the kernel logic is compiled.
+// hardware bring-up is skipped and only the kernel logic is compiled;
+// dead-code warnings would then fire against the whole boot path.
+#![cfg_attr(test, allow(dead_code))]
+
 
 extern crate alloc;
 

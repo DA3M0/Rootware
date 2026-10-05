@@ -246,6 +246,7 @@ pub fn map_user_page(space: &AddressSpace, virt: u64, phys: u64, flags: u64) -> 
 }
 
 /// Map `pages` consecutive physical frames starting at `virt`/`phys`.
+#[allow(dead_code)] // public mapping helper for future loaders
 pub fn map_user_range(
     space: &AddressSpace,
     virt: u64,
