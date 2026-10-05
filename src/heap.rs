@@ -75,8 +75,8 @@ impl KernelHeap {
     }
 
     /// Lazily initialize on first use when `init` was not called yet (host
-    /// tests).
-    fn ensure_init() {
+    /// tests, early boot).
+    pub(crate) fn ensure_init() {
         let _guard = HeapGuard::acquire();
         unsafe {
             if !INITIALIZED {
@@ -86,11 +86,11 @@ impl KernelHeap {
     }
 }
 
-/// Reserve the heap once at boot.
+/// Reserve the heap once at boot. Idempotent: early boot code (module
+/// relocation) may have forced the lazy initialization already, and a
+/// second reset would discard its allocations.
 pub fn init() {
-    unsafe {
-        KernelHeap::reset();
-    }
+    KernelHeap::ensure_init();
     crate::serial_println!("[HEAP] kernel heap ready (4 MiB)");
 }
 
@@ -207,6 +207,41 @@ mod tests {
         c.resize(64 * 1024, 0xAB);
         assert_eq!(c[0], 0xAB);
         assert_eq!(c[c.len() - 1], 0xAB);
+    }
+
+    #[test]
+    fn live_blocks_survive_later_traffic() {
+        // Mirrors the boot-time pattern: three leaked module images at the
+        // heap base, then Vec growth/drop traffic. A later 8 KiB fill of
+        // 0xA5 must never touch the live blocks.
+        let sizes = [0x19B8usize, 0x3E68, 0x28E0];
+        let copies: Vec<(*mut u8, core::alloc::Layout)> = sizes
+            .iter()
+            .map(|size| {
+                let layout = Layout::from_size_align(*size, 16).unwrap();
+                let ptr = unsafe { alloc::alloc::alloc(layout) };
+                assert!(!ptr.is_null());
+                unsafe { core::ptr::write_bytes(ptr, 0x77, *size) };
+                (ptr, layout)
+            })
+            .collect();
+
+        let mut values: Vec<u64> = Vec::new();
+        for index in 0..2000u64 {
+            values.push(index);
+        }
+        drop(values);
+        let mut block: Vec<u8> = Vec::new();
+        block.resize(8192, 0xA5);
+        assert_eq!(block[0], 0xA5);
+
+        for (ptr, layout) in &copies {
+            let bytes = unsafe { core::slice::from_raw_parts(*ptr, layout.size()) };
+            assert!(
+                bytes.iter().all(|byte| *byte == 0x77),
+                "live allocation was overwritten"
+            );
+        }
     }
 
     #[test]

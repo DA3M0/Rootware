@@ -17,10 +17,14 @@ SECTIONS {
 
     .data : ALIGN(4K) {
         *(.data*)
+        *(.got*)
+        *(.data.rel.ro*)
+        *(.sdata*)
     }
 
     .bss : ALIGN(4K) {
         *(.bss*)
+        *(.sbss*)
         *(COMMON)
     }
 

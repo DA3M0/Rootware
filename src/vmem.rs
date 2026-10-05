@@ -424,7 +424,7 @@ pub fn selftest() {
     crate::serial_println!("[VMEM] address space selftest passed");
 }
 
-fn translate_in_space(space: &AddressSpace, virt: u64) -> Option<u64> {
+pub(crate) fn translate_in_space(space: &AddressSpace, virt: u64) -> Option<u64> {
     unsafe {
         let pml4 = table_at(space.pml4);
         let pml4e = pml4.entries[index(virt, 39)];

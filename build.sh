@@ -28,6 +28,11 @@ done
 cp grub.cfg "$ISO_DIR/boot/grub/"
 grub2-mkrescue -o rootware.iso "$ISO_DIR"
 
+if [ "${1:-}" = "--no-run" ]; then
+    echo "==> Image ready: rootware.iso"
+    exit 0
+fi
+
 echo "==> Running in QEMU..."
 qemu-system-x86_64 \
     -cdrom rootware.iso \

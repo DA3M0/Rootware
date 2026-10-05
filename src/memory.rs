@@ -159,57 +159,72 @@ pub fn init(multiboot_info: u64) {
 
     unsafe {
         let end = info + total_size;
-        let mut tag = info + 8;
-        while tag + 8 <= end {
-            let typ = core::ptr::read_unaligned(tag as *const u32);
-            let size = core::ptr::read_unaligned((tag + 4) as *const u32) as usize;
-            if size < 8 {
-                crate::serial_println!("[MEMORY] invalid tag size");
-                return;
-            }
-
-            match typ {
-                MMAP_TAG => {
-                    // mmap tag: type(4) size(4) entry_size(4) entry_version(4)
-                    let entry_size =
-                        core::ptr::read_unaligned((tag + 8) as *const u32) as usize;
-                    if entry_size < 24 {
-                        crate::serial_println!("[MEMORY] invalid mmap entry size");
-                        return;
+        // Two passes: the memory map frees frames before module ranges are
+        // reserved, whichever order GRUB placed the tags in. A single pass
+        // would let the allocator hand out frames that still hold boot
+        // module images.
+        for pass in 0..2 {
+            let mut tag = info + 8;
+            while tag + 8 <= end {
+                let typ = core::ptr::read_unaligned(tag as *const u32);
+                let size = core::ptr::read_unaligned((tag + 4) as *const u32) as usize;
+                if size < 8 {
+                    crate::serial_println!("[MEMORY] invalid tag size");
+                    return;
+                }
+                let mmap_pass = typ == MMAP_TAG && pass == 0;
+                let module_pass = typ == MODULE_TAG && pass == 1;
+                if !mmap_pass && !module_pass {
+                    let next = tag + ((size + 7) & !7);
+                    if next <= tag || next > end || typ == 0 {
+                        break;
                     }
-                    let entries_end = tag + size;
-                    let mut entry = tag + 16;
-                    while entry + entry_size <= entries_end {
-                        let base = core::ptr::read_unaligned(entry as *const u64);
-                        let length = core::ptr::read_unaligned((entry + 8) as *const u64);
-                        let region_type = core::ptr::read_unaligned((entry + 16) as *const u32);
-                        if region_type == MMAP_ENTRY_AVAILABLE && length > 0 {
-                            let region_start = (base + FRAME_SIZE - 1) & !(FRAME_SIZE - 1);
-                            let region_end = base.saturating_add(length) & !(FRAME_SIZE - 1);
-                            if region_end > top {
-                                top = region_end;
-                            }
-                            add_available_region(region_start, region_end, kernel_end);
+                    tag = next;
+                    continue;
+                }
+
+                match typ {
+                    MMAP_TAG => {
+                        // mmap tag: type(4) size(4) entry_size(4) entry_version(4)
+                        let entry_size =
+                            core::ptr::read_unaligned((tag + 8) as *const u32) as usize;
+                        if entry_size < 24 {
+                            crate::serial_println!("[MEMORY] invalid mmap entry size");
+                            return;
                         }
-                        entry += entry_size;
+                        let entries_end = tag + size;
+                        let mut entry = tag + 16;
+                        while entry + entry_size <= entries_end {
+                            let base = core::ptr::read_unaligned(entry as *const u64);
+                            let length = core::ptr::read_unaligned((entry + 8) as *const u64);
+                            let region_type =
+                                core::ptr::read_unaligned((entry + 16) as *const u32);
+                            if region_type == MMAP_ENTRY_AVAILABLE && length > 0 {
+                                let region_start = (base + FRAME_SIZE - 1) & !(FRAME_SIZE - 1);
+                                let region_end =
+                                    base.saturating_add(length) & !(FRAME_SIZE - 1);
+                                if region_end > top {
+                                    top = region_end;
+                                }
+                                add_available_region(region_start, region_end, kernel_end);
+                            }
+                            entry += entry_size;
+                        }
                     }
+                    MODULE_TAG => {
+                        let mod_start = core::ptr::read_unaligned((tag + 8) as *const u32) as u64;
+                        let mod_end = core::ptr::read_unaligned((tag + 12) as *const u32) as u64;
+                        register_module(tag + 16, tag + size, mod_start, mod_end);
+                    }
+                    _ => {}
                 }
-                MODULE_TAG => {
-                    let mod_start = core::ptr::read_unaligned((tag + 8) as *const u32) as u64;
-                    let mod_end = core::ptr::read_unaligned((tag + 12) as *const u32) as u64;
-                    register_module(tag + 16, tag + size, mod_start, mod_end);
-                }
-                _ => {}
-            }
 
-            let next = tag + ((size + 7) & !7);
-            if next <= tag || next > end {
-                break;
+                let next = tag + ((size + 7) & !7);
+                if next <= tag || next > end || typ == 0 {
+                    break;
+                }
+                tag = next;
             }
-            if typ == 0 {
-                break;
-            }
-            tag = next;
         }
 
         // Keep the Multiboot2 block itself out of the allocator.
@@ -308,28 +323,37 @@ fn register_module(cmdline: usize, tag_end: usize, start: u64, end: u64) {
         return;
     }
     name[..base.len()].copy_from_slice(base);
-    let info = ModuleInfo {
-        name,
-        start,
-        end,
-    };
 
     unsafe {
-        if MODULE_COUNT < MAX_MODULES {
-            reserve_range(start, end);
-            (*(&raw mut MODULES))[MODULE_COUNT] = Some(info);
-            MODULE_COUNT += 1;
-            if let Some(name) = info.name_str() {
-                crate::serial_println!(
-                    "[MEMORY] module '{}' at {:#x}..{:#x}",
-                    name,
-                    start,
-                    end
-                );
-            }
+        if MODULE_COUNT >= MAX_MODULES {
+            return;
         }
+        // grub may place module images inside the region the kernel's own
+        // .bss occupies (the ELF load segments do not reflect the
+        // linker-reserved heap and stacks, so its zeroing pass can eat
+        // them). Relocate the image into the heap immediately, before
+        // anything can overwrite it; the original range stays reserved
+        // either way.
+        let size = (end - start) as usize;
+        let layout = core::alloc::Layout::from_size_align(size, 16).ok();
+        let buffer = layout
+            .map(|layout| alloc::alloc::alloc(layout))
+            .filter(|pointer| !pointer.is_null());
+        let Some(buffer) = buffer else {
+            crate::serial_println!("[MEMORY] heap copy failed for module image");
+            return;
+        };
+        core::ptr::copy_nonoverlapping(start as *const u8, buffer, size);
+        let copy_start = buffer as u64;
+        (*(&raw mut MODULES))[MODULE_COUNT] = Some(ModuleInfo {
+            name,
+            start: copy_start,
+            end: copy_start + size as u64,
+        });
+        MODULE_COUNT += 1;
     }
 }
+
 
 /// Read the module image bytes (safe only while the module memory is
 /// identity-mapped, which the kernel guarantees for all RAM).

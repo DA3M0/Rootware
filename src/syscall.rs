@@ -142,14 +142,22 @@ fn reply(request_ptr: u64, payload_ptr: u64) -> Result<(), ErrorCode> {
 
 fn console_write(ptr: u64, len: u64) -> Result<(), ErrorCode> {
     if len > 4096 {
+        crate::serial_println!("[DBG] console: len too big {}", len);
         return Err(ErrorCode::InvalidArgument);
     }
     let mut buffer = [0u8; 4096];
-    let copied = user_read_bytes(ptr, len, &mut buffer)?;
-    for byte in &buffer[..copied] {
-        crate::serial::write_byte(*byte);
+    match user_read_bytes(ptr, len, &mut buffer) {
+        Ok(copied) => {
+            for byte in &buffer[..copied] {
+                crate::serial::write_byte(*byte);
+            }
+            Ok(())
+        }
+        Err(code) => {
+            crate::serial_println!("[DBG] console: read failed ptr={:#x} len={} code={:?}", ptr, len, code);
+            Err(code)
+        }
     }
-    Ok(())
 }
 
 fn spawn(name_ptr: u64, name_len: u64) -> Result<u16, ErrorCode> {

@@ -17,6 +17,7 @@ mod memory;
 #[cfg(not(test))]
 mod panic;
 mod process;
+mod selftest;
 mod serial;
 mod syscall;
 mod timer;
@@ -53,6 +54,7 @@ pub extern "C" fn rust_start(mb_info: u64) -> ! {
     gdt::init();
     idt::init();
     timer::init();
+    selftest::run_all();
     // From here on the APIC timer fires; all handlers are installed and
     // the TSS provides kernel stacks for interrupts from Ring 3.
     unsafe {

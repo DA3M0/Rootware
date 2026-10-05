@@ -112,12 +112,21 @@ fn map_segment(
     let last_page = (segment.vaddr + segment.memsz).div_ceil(0x1000) * 0x1000;
     let mut page = first_page;
     while page < last_page {
-        let frame = crate::memory::alloc_frame().ok_or(ErrorCode::QueueFull)?;
-        // Zero the whole frame, then copy the file bytes overlapping it.
-        unsafe {
-            core::ptr::write_bytes(frame as *mut u8, 0, 0x1000);
-        }
-        vmem::map_user_page(space, page, frame, USER | WRITABLE)?;
+        // A previous segment may already map this page (lld can emit a
+        // small trailing segment sharing the last rodata page). Reuse the
+        // existing frame instead of shadowing the earlier mapping.
+        let frame = match vmem::translate_in_space(space, page) {
+            Some(phys) => phys & !(0x1000 - 1),
+            None => {
+                let frame = crate::memory::alloc_frame().ok_or(ErrorCode::QueueFull)?;
+                // Zero the whole frame, then copy the file bytes overlapping it.
+                unsafe {
+                    core::ptr::write_bytes(frame as *mut u8, 0, 0x1000);
+                }
+                vmem::map_user_page(space, page, frame, USER | WRITABLE)?;
+                frame
+            }
+        };
 
         let copy_start = page.max(segment.vaddr);
         let copy_end = (page + 0x1000).min(segment.vaddr + segment.filesz);

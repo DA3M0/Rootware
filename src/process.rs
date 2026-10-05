@@ -321,6 +321,14 @@ pub fn schedule() {
     let current = unsafe { CURRENT };
     match pick_ready() {
         Some(slot) => {
+            #[cfg(target_os = "none")]
+            crate::serial_println!(
+                "[DBG] switch {:+?} -> slot {} (pid {}, user {})",
+                current,
+                slot,
+                unsafe { (*(&raw const PROCESSES))[slot].id },
+                unsafe { (*(&raw const PROCESSES))[slot].is_user }
+            );
             unsafe {
                 CURSOR = slot as isize;
                 CURRENT = slot as isize;
@@ -367,6 +375,17 @@ fn idle() -> ! {
         } else if !runnable {
             crate::serial_println!("[BOOT] idle: no runnable processes remain");
         }
+        // QEMU test harness: exit through the isa-debug-exit port. The
+        // status distinguishes a clean boot-time selftest run from a
+        // failed one; on real hardware the write is harmless and the
+        // kernel keeps halting.
+        let status: u8 = if crate::selftest::failed() { 0x20 } else { 0x10 };
+        core::arch::asm!(
+            "out dx, al",
+            in("dx") 0xf4u16,
+            in("al") status,
+            options(nomem, nostack)
+        );
         loop {
             core::arch::asm!("sti; hlt");
         }
