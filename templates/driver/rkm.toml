@@ -1,0 +1,7 @@
+[module]
+name = "{{project_name}}"
+version = "0.1.0"
+loader = "rkm"
+
+[linux]
+# Optional Linux driver source/configuration goes here.

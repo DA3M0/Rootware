@@ -5,3 +5,7 @@ edition = "2024"
 build = "build.rs"
 
 [dependencies]
+
+[workspace]
+members = [".", "sdk/librootware"]
+resolver = "2"

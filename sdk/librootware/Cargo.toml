@@ -1,0 +1,13 @@
+[package]
+name = "librootware"
+version = "0.1.0"
+edition = "2024"
+description = "Userspace Rust SDK for the Rootware kernel ABI"
+license = "Apache-2.0"
+
+[features]
+default = ["std"]
+std = []
+
+[lib]
+path = "src/lib.rs"
