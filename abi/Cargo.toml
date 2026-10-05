@@ -1,6 +1,6 @@
 [package]
 name = "rootware-abi"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "Apache-2.0"
 description = "Frozen Rootware 1.0 kernel ABI: message layout, capability kinds, syscall numbers, error codes"

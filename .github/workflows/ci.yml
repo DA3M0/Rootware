@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-none
+      - name: Host unit tests (kernel logic + SDK + simulator)
+        run: cargo test --workspace
+
+  stability-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-none
+      - name: Install boot toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm grub-pc-bin mtools xorriso qemu-system-x86
+      - name: Stability gate (selftests + user-space round trip)
+        run: ./run-tests.sh
