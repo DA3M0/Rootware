@@ -25,6 +25,12 @@
   `ServiceRegistry`（`std` feature）负责注册、启动、停止和按名称分发；
   `EchoService` 是可用于入门和测试的最小服务示例。`reply` 统一以
   `RESPONSE` 类型回包，路由表据此把应答送回请求方。
+- `rkm::register(name, version, kind)`：把调用进程注册为 RKM 模块
+  （`SYS_MODULE_REGISTER`），返回内核回填后的描述符（含分配的 pid）。
+  `rkm::list(&mut [RkmModule])` 枚举注册表（`SYS_MODULE_LIST`）。
+  `rkm::Driver` trait 与 `Service` 镜像。原生 Rust 驱动示例见
+  `user/rkm-driver`；Linux 兼容 C 驱动（`compat/linux` shim + ops 表）
+  示例见 `user/zero-driver`。
 - `ipc::message_type`：标准 `REQUEST`、`RESPONSE`、`EVENT`、`BROADCAST` 类型；
   `RouteRule` 描述类型到接收方的路由。
 - `ipc::BROADCAST_RECEIVER`：广播消息的特殊接收方；内核按路由表复制到多个
@@ -53,6 +59,15 @@
 | 6 | EXIT | 退出码 | — | 不返回 |
 | 7 | SPAWN | `*const u8` 程序名 | 名字长度 | 新 pid 或错误 |
 | 8 | CAP_REQUEST | 能力 kind | — | 0 或 `PermissionDenied` |
+| 9 | MODULE_REGISTER | `*mut RkmModule`（in/out） | — | 0 或错误码 |
+| 10 | MODULE_LIST | `*mut RkmModule` 输出数组 | 数组容量（条目） | 注册总数（正数）或错误码 |
+
+`RkmModule` 是冻结的 32 字节描述符（`rkm::RkmModule`）：调用者填
+`name`（≤16 字节）、`version`（≤8 字节）、`kind`（`NATIVE=1` /
+`LINUX=2`），内核校验后回填 `pid` 与 `state`（`ACTIVE=1` / `STOPPED=2`）。
+注册即授权：模块获得 `IPC_SEND` 能力，权限表自动开通 pid 1 与驱动之间
+的双向通道。驱动请求使用消息类型 `DRIVER_REQUEST=5`（直投驱动 pid），
+payload 约定见开发者指南。
 
 库默认启用 `std` 以便服务和模拟器使用；内核适配可通过
 `default-features = false` 使用无标准库构建（该模式下 SDK 提供 crt0 与

@@ -30,20 +30,22 @@ Rootware has three layers:
 - Virtual memory: 4-level paging, one address space per process (user region at 0x40000000), CR3 switching, full-RAM identity map for the kernel
 - Physical memory: bitmap frame allocator over the Multiboot2 memory map, plus a kernel heap (`alloc` collections)
 - IPC: per-receiver bounded queues, typed routing, capability checks, audit log; sender identity is kernel-owned
-- Syscalls (ABI v4, frozen): IPC send/receive/reply, version handshake, console write, exit, spawn, capability request — entered through `syscall`/`sysret` with per-process kernel stacks and validated user pointers
+- Syscalls (ABI v4, frozen): IPC send/receive/reply, version handshake, console write, exit, spawn, capability request, RKM module register/list — entered through `syscall`/`sysret` with per-process kernel stacks and validated user pointers
+- RKM driver framework: user-space drivers register into a kernel registry (native Rust via the SDK, or Linux-style C drivers via the compat shim); registration grants the IPC send capability and opens the driver's client lanes
 - Interrupts: full exception frames, kernel GDT + TSS (RSP0, IST), Ring 3 faults kill the offending process instead of halting the machine
 
 ### SDK (`librootware`, Apache 2.0)
 
 - `Transport` abstraction with a syscall-backed implementation and an in-memory test double
 - Console output, process spawn/exit, capability requests, runtime ABI handshake
+- RKM driver support: `rkm::register`/`rkm::list`, a `Driver` trait mirroring `Service`
 - `Service` lifecycle framework; no_std mode ships crt0 and a panic handler
 
 ### Userspace (boot modules)
 
-`user/` ships three example programs built as static ELF64 binaries loaded by the kernel's ELF loader: `hello` (console), `echo-service` (IPC service, pid 2), `ipc-client` (handshake + capability + echo round trip, pid 1). Around 4,600 lines of Rust in total, zero third-party dependencies.
+`user/` ships example programs built as static ELF64 binaries loaded by the kernel's ELF loader: `hello` (console), `echo-service` (IPC service, pid 2), `ipc-client` (handshake + capability + echo round trip + RKM driver read, pid 1), `rkm-driver` (native RKM counter device), and `zero-driver` (a Linux-compatible C driver ported from `/dev/zero`, compiled through `compat/linux`). Around 4,900 lines of Rust plus a small C shim in total, zero third-party dependencies.
 
-The larger userspace components (filesystem, drivers, shell, coreutils) remain community-reuse plans for after 1.0.
+The larger userspace components (filesystem, shell, coreutils) remain community-reuse plans for after 1.0; drivers now have a real framework (RKM) to land in.
 
 ## Build & Run
 

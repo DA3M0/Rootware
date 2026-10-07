@@ -286,6 +286,8 @@ pub fn exit_current(code: i64) -> ! {
     unsafe {
         let slot = CURRENT as usize;
         let id = PROCESSES[slot].id;
+        // A departing driver's RKM entry survives as a Stopped record.
+        crate::rkm::on_process_exit(id);
         if PROCESSES[slot].is_user {
             let space = PROCESSES[slot].space;
             vmem::destroy_address_space(&space);
@@ -418,6 +420,22 @@ pub fn init_and_run() -> ! {
         if let Some(pid) = lowest_free_pid() {
             if let Err(error) = spawn_user_by_name("hello", pid) {
                 crate::serial_println!("[PROC] hello spawn failed: {:?}", error);
+            }
+        }
+    }
+
+    // RKM drivers register themselves through SYS_MODULE_REGISTER once
+    // scheduled; the kernel only launches them by boot-module name.
+    const RKM_BOOT_DRIVERS: [&str; 2] = ["rkm-driver", "zero-driver"];
+    for driver in RKM_BOOT_DRIVERS {
+        if crate::memory::find_module(driver).is_some() {
+            match lowest_free_pid() {
+                Some(pid) => {
+                    if let Err(error) = spawn_user_by_name(driver, pid) {
+                        crate::serial_println!("[PROC] {} spawn failed: {:?}", driver, error);
+                    }
+                }
+                None => crate::serial_println!("[PROC] no free pid for {}", driver),
             }
         }
     }

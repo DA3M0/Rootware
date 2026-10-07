@@ -196,6 +196,44 @@ pub fn load_routes(config: &RouteConfig) {
     crate::serial_println!("[IPC] route table loaded");
 }
 
+/// Opens the driver's IPC lanes when an RKM module registers: the
+/// client slot (pid 1) may send it direct requests, and it may answer
+/// back. Registration-time authorization keeps the boot permission
+/// table free of driver-specific pids.
+pub fn allow_driver(pid: u16) {
+    if pid == 0 {
+        return;
+    }
+    unsafe {
+        let config = &raw mut PERMISSIONS;
+        let table = &mut *config;
+        let count = table.count as usize;
+        if count + 2 > MAX_PERMISSION_RULES {
+            crate::serial_println!(
+                "[IPC] driver {} permission rules exhausted; requests may be denied",
+                pid
+            );
+            return;
+        }
+        table.rules[count] = PermissionRule {
+            sender: 1,
+            receiver: pid,
+            capability: Capability {
+                id: capability::IPC_SEND_CAPABILITY,
+            },
+        };
+        table.rules[count + 1] = PermissionRule {
+            sender: pid,
+            receiver: 1,
+            capability: Capability {
+                id: capability::IPC_SEND_CAPABILITY,
+            },
+        };
+        table.count = (count + 2) as u16;
+    }
+    crate::serial_println!("[IPC] driver lanes open for pid {}", pid);
+}
+
 fn audit(message: &Message, receiver: u16, result: u16) {
     crate::audit::record(crate::audit::AuditEntry {
         timestamp: crate::timer::ticks(),

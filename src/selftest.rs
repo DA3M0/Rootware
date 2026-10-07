@@ -33,6 +33,7 @@ pub fn run_all() {
     check("elf-modules", elf_modules_parse());
     check("abi-status", abi_status_roundtrip());
     check("capabilities", capability_grants());
+    check("rkm-registry", rkm_registry());
     serial_println!("[SELFTEST] suite complete");
 }
 
@@ -141,4 +142,43 @@ fn capability_grants() -> bool {
     crate::capability::holds(1, send)
         && !crate::capability::holds(1, other)
         && !crate::capability::holds(0, send)
+}
+
+/// Drive the RKM registry through register/reject/stop/refresh cycles
+/// and leave it empty for the boot drivers.
+fn rkm_registry() -> bool {
+    use rootware_abi::rkm::{RkmModule, module_kind, module_state};
+    crate::rkm::reset();
+    let ok = (|| -> Option<bool> {
+        let native =
+            crate::rkm::register(7, RkmModule::new("selftest-a", "1.0", module_kind::NATIVE)).ok()?;
+        if native.pid != 7 || native.state != module_state::ACTIVE {
+            return Some(false);
+        }
+        if crate::rkm::register(8, RkmModule::new("selftest-b", "1.0", module_kind::LINUX))
+            .is_err()
+        {
+            return Some(false);
+        }
+        // Duplicate active pid and unknown kinds must both be rejected.
+        if crate::rkm::register(7, RkmModule::new("dup", "1.0", module_kind::NATIVE)).is_ok() {
+            return Some(false);
+        }
+        if crate::rkm::register(6, RkmModule::new("bad", "1.0", 9)).is_ok() {
+            return Some(false);
+        }
+        if crate::rkm::count() != 2 {
+            return Some(false);
+        }
+        // Exiting stops the entry without dropping it; re-registration
+        // refreshes the same slot.
+        crate::rkm::on_process_exit(7);
+        if crate::rkm::entry(0)?.state != module_state::STOPPED {
+            return Some(false);
+        }
+        crate::rkm::register(7, RkmModule::new("selftest-a", "1.1", module_kind::NATIVE)).ok()?;
+        Some(crate::rkm::count() == 2)
+    })() == Some(true);
+    crate::rkm::reset();
+    ok
 }

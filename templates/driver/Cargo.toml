@@ -4,4 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-librootware = { path = "../sdk/librootware" }
+# 模板按 user/<driver>/ 的目录深度实例化;放在别处时请相应调整。
+librootware = { path = "../../sdk/librootware", default-features = false }
+
+[features]
+# 默认主机模拟模式(有 std,可 cargo test);构建 Rootware 镜像时
+# 使用 --no-default-features 关闭。
+default = ["host-sim"]
+host-sim = ["librootware/std"]
+
+# Standalone workspace: user programs build against the SDK by path,
+# outside the kernel workspace.
+[workspace]

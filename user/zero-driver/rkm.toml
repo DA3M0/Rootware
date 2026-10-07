@@ -1,0 +1,9 @@
+[module]
+name = "zero-driver"
+version = "0.1.0"
+loader = "rkm"
+kind = "linux"
+
+[linux]
+# C 源码与 compat/linux shim 一起编译;名字/版本由此清单注入。
+source = ["src/zero.c"]

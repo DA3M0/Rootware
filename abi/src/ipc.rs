@@ -13,6 +13,10 @@ pub mod message_type {
     pub const RESPONSE: u16 = 2;
     pub const EVENT: u16 = 3;
     pub const BROADCAST: u16 = 4;
+    /// Direct RKM driver request (added 1.0.x for the driver framework).
+    /// No route rule matches this type, so the router delivers it to
+    /// the requested receiver — the driver's own pid.
+    pub const DRIVER_REQUEST: u16 = 5;
 }
 
 /// One routing-table entry: messages of `message_type` are also

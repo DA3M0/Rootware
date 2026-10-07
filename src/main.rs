@@ -20,6 +20,7 @@ mod memory;
 #[cfg(not(test))]
 mod panic;
 mod process;
+mod rkm;
 mod selftest;
 mod serial;
 mod syscall;
@@ -54,6 +55,7 @@ pub extern "C" fn rust_start(mb_info: u64) -> ! {
     capability::init();
     audit::init();
     ipc::init();
+    rkm::init();
     gdt::init();
     idt::init();
     timer::init();

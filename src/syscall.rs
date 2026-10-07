@@ -7,9 +7,10 @@
 use core::mem::size_of;
 
 use rootware_abi::capability::capability_kind;
+use rootware_abi::rkm::RkmModule;
 use rootware_abi::syscall::{
     SYS_CAP_REQUEST, SYS_CONSOLE_WRITE, SYS_EXIT, SYS_IPC_RECEIVE, SYS_IPC_REPLY, SYS_IPC_SEND,
-    SYS_SPAWN, SYS_VERSION,
+    SYS_MODULE_LIST, SYS_MODULE_REGISTER, SYS_SPAWN, SYS_VERSION,
 };
 use rootware_abi::{ErrorCode, Message};
 
@@ -97,6 +98,14 @@ pub fn dispatch(number: u64, first: u64, second: u64) -> i64 {
             Ok(()) => 0,
             Err(code) => code.status(),
         },
+        SYS_MODULE_REGISTER => match register_module(first) {
+            Ok(()) => 0,
+            Err(code) => code.status(),
+        },
+        SYS_MODULE_LIST => match list_modules(first, second) {
+            Ok(count) => count,
+            Err(code) => code.status(),
+        },
         _ => ErrorCode::Unsupported.status(),
     }
 }
@@ -178,4 +187,65 @@ fn request_capability(kind: u32) -> Result<(), ErrorCode> {
     } else {
         Err(ErrorCode::PermissionDenied)
     }
+}
+
+/// Registers the calling driver process as an RKM module. The caller
+/// fills name/version/kind in the descriptor; the kernel fills pid and
+/// state and writes the stored descriptor back to the same memory, so
+/// the driver learns its own process id.
+fn register_module(descriptor_ptr: u64) -> Result<(), ErrorCode> {
+    let descriptor: RkmModule = user_read(descriptor_ptr)?;
+    let pid = crate::process::current_id();
+    let stored = crate::rkm::register(pid, descriptor)?;
+    // Registration IS the driver privilege: a registered module may
+    // hold IPC_SEND (to answer requests) and gets its client lanes
+    // opened in the permission table.
+    let _ = crate::capability::grant(
+        pid,
+        crate::capability::Capability {
+            id: crate::capability::IPC_SEND_CAPABILITY,
+        },
+    );
+    crate::ipc::allow_driver(pid);
+    crate::serial_println!(
+        "[RKM] module '{}' v{} ({}) registered as pid {}",
+        stored.name_str().unwrap_or("?"),
+        stored.version_str().unwrap_or("?"),
+        kind_name(stored.kind),
+        pid
+    );
+    user_write(descriptor_ptr, stored)
+}
+
+fn kind_name(kind: u8) -> &'static str {
+    match kind {
+        rootware_abi::rkm::module_kind::NATIVE => "native",
+        rootware_abi::rkm::module_kind::LINUX => "linux",
+        _ => "unknown",
+    }
+}
+
+/// Copies up to `capacity` registry entries into caller memory and
+/// returns the total number of stored entries, so a caller with a small
+/// buffer can retry with a bigger one.
+fn list_modules(buffer_ptr: u64, capacity: u64) -> Result<i64, ErrorCode> {
+    if buffer_ptr == 0 || capacity == 0 {
+        return Err(ErrorCode::InvalidArgument);
+    }
+    let total = crate::rkm::count();
+    let written = (capacity as usize).min(total);
+    if written > 0 {
+        let bytes = (written * size_of::<RkmModule>()) as u64;
+        if !vmem::is_user_accessible(buffer_ptr, bytes) {
+            return Err(ErrorCode::InvalidArgument);
+        }
+    }
+    for index in 0..written {
+        let Some(entry) = crate::rkm::entry(index) else {
+            break;
+        };
+        let slot = buffer_ptr + (index * size_of::<RkmModule>()) as u64;
+        user_write(slot, entry)?;
+    }
+    Ok(total as i64)
 }

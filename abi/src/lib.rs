@@ -4,6 +4,7 @@
 //! between the Rootware kernel and user programs:
 //!
 //! - the `#[repr(C)]` [`ipc::Message`] layout (44 bytes, never resized),
+//! - the `#[repr(C)]` [`rkm::RkmModule`] driver descriptor (32 bytes),
 //! - standard capability kinds,
 //! - the frozen syscall number table,
 //! - error codes and their on-the-wire status encoding.
@@ -18,11 +19,13 @@
 pub mod capability;
 pub mod error;
 pub mod ipc;
+pub mod rkm;
 pub mod syscall;
 
 pub use capability::{Capability, capability_kind};
 pub use error::ErrorCode;
 pub use ipc::{Message, RouteRule, message_type};
+pub use rkm::{RkmModule, module_kind, module_state};
 
 /// ABI version frozen for the Rootware 1.0 release.
 pub const ABI_VERSION: u32 = 4;
@@ -72,6 +75,8 @@ mod tests {
         assert_eq!(SYS_EXIT, 6);
         assert_eq!(SYS_SPAWN, 7);
         assert_eq!(SYS_CAP_REQUEST, 8);
+        assert_eq!(SYS_MODULE_REGISTER, 9);
+        assert_eq!(SYS_MODULE_LIST, 10);
     }
 
     #[test]
