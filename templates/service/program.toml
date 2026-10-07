@@ -1,0 +1,4 @@
+[program]
+name = "{{project_name}}"
+kind = "service"         # 常驻 IPC 服务(开机自动拉起,注册后驻留)
+entry = "rust"

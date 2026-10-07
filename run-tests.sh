@@ -10,7 +10,7 @@ echo "==> Host unit tests (whole workspace)"
 cargo test --workspace --quiet
 
 echo "==> Building release image"
-./build.sh --no-run
+./build.sh iso
 
 SERIAL_LOG="$(mktemp)"
 trap 'rm -f "$SERIAL_LOG"' EXIT
@@ -44,6 +44,7 @@ grep -q "PASS rkm-registry" "$SERIAL_LOG" || fail "rkm registry selftest did not
 grep -q "\[RKM\] module 'rkm-driver' v0.1.0 (native) registered as pid" "$SERIAL_LOG" || fail "native RKM driver did not register"
 grep -q "\[RKM\] module 'zero-driver' v0.1.0 (linux) registered as pid" "$SERIAL_LOG" || fail "Linux-compat RKM driver did not register"
 grep -q "zero-driver read ok: 8 zero bytes" "$SERIAL_LOG" || fail "zero-driver end-to-end read failed"
+grep -q "mixed: c=17 cpp=33 zig=51" "$SERIAL_LOG" || fail "multi-language mixed-demo did not run"
 if grep -q "\[SELFTEST\] FAIL" "$SERIAL_LOG"; then fail "a kernel selftest failed"; fi
 grep -q "\[SELFTEST\] suite complete" "$SERIAL_LOG" || fail "selftest suite did not run to completion"
 if grep -qi "PANIC" "$SERIAL_LOG"; then fail "a panic occurred during boot"; fi

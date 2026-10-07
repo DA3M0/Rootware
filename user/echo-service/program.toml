@@ -1,0 +1,4 @@
+[program]
+name = "echo-service"
+kind = "service"         # 常驻 IPC 服务(启动语义与 program 相同)
+entry = "rust"

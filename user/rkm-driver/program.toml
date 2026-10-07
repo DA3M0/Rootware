@@ -1,0 +1,5 @@
+[program]
+name = "rkm-driver"
+kind = "driver"          # RKM 驱动(SDK 注册,名字/版本写在 src/main.rs)
+entry = "rust"
+version = "0.1.0"

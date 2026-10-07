@@ -396,13 +396,17 @@ fn idle() -> ! {
 
 /// Boot-time startup: register boot programs (or the kernel demo) and
 /// start scheduling. Never returns.
+///
+/// The boot module list IS the program list: pinned system slots spawn
+/// first, then every remaining ELF module is launched automatically in
+/// boot order — adding a program to the image is all it takes to run
+/// it. Non-ELF or failing modules only log an error.
 pub fn init_and_run() -> ! {
     let echo = crate::memory::find_module("echo-service").is_some();
     let client = crate::memory::find_module("ipc-client").is_some();
-    let hello = crate::memory::find_module("hello").is_some();
 
     // Boot pids are pinned by the default permission table: the client is
-    // pid 1, the echo service is pid 2. Anything else spawns after them.
+    // pid 1, the echo service is pid 2. Everything else spawns after them.
     if echo {
         match spawn_user_by_name("echo-service", 2) {
             Ok(()) => {}
@@ -416,31 +420,31 @@ pub fn init_and_run() -> ! {
         }
     }
 
-    if hello {
-        if let Some(pid) = lowest_free_pid() {
-            if let Err(error) = spawn_user_by_name("hello", pid) {
-                crate::serial_println!("[PROC] hello spawn failed: {:?}", error);
-            }
+    let count = crate::memory::module_count();
+    for index in 0..count {
+        let Some(info) = crate::memory::module(index) else {
+            continue;
+        };
+        let Some(name) = info.name_str() else {
+            continue;
+        };
+        if name == "echo-service" || name == "ipc-client" {
+            continue;
         }
-    }
-
-    // RKM drivers register themselves through SYS_MODULE_REGISTER once
-    // scheduled; the kernel only launches them by boot-module name.
-    const RKM_BOOT_DRIVERS: [&str; 2] = ["rkm-driver", "zero-driver"];
-    for driver in RKM_BOOT_DRIVERS {
-        if crate::memory::find_module(driver).is_some() {
-            match lowest_free_pid() {
-                Some(pid) => {
-                    if let Err(error) = spawn_user_by_name(driver, pid) {
-                        crate::serial_println!("[PROC] {} spawn failed: {:?}", driver, error);
-                    }
+        match lowest_free_pid() {
+            Some(pid) => {
+                if let Err(error) = spawn_user_by_name(name, pid) {
+                    crate::serial_println!("[PROC] {} spawn failed: {:?}", name, error);
                 }
-                None => crate::serial_println!("[PROC] no free pid for {}", driver),
+            }
+            None => {
+                crate::serial_println!("[PROC] process table full; {} not spawned", name);
+                break;
             }
         }
     }
 
-    if !echo && !client {
+    if !echo && !client && count == 0 {
         // No user modules on the boot medium: run the kernel demo pair so
         // the IPC path is exercised on every boot.
         crate::serial_println!("[PROC] no user modules; running kernel demo");

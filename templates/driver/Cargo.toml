@@ -4,13 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# 模板按 user/<driver>/ 的目录深度实例化;放在别处时请相应调整。
-librootware = { path = "../../sdk/librootware", default-features = false }
+# 模板按 user/<name>/ 的目录深度实例化;放在别处时请相应调整。
+librootware = { path = "../../sdk/librootware", default-features = false, features = ["crt0"] }
 
 [features]
-# 默认主机模拟模式(有 std,可 cargo test);构建 Rootware 镜像时
-# 使用 --no-default-features 关闭。
-default = ["host-sim"]
+# 默认按 Rootware 裸机构建(./build.sh driver {{project_name}});
+# 主机模拟开发时加 --features host-sim(有 std,可 cargo test)。
 host-sim = ["librootware/std"]
 
 # Standalone workspace: user programs build against the SDK by path,

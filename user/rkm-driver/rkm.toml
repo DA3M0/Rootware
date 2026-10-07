@@ -1,8 +1,0 @@
-[module]
-name = "rkm-driver"
-version = "0.1.0"
-loader = "rkm"
-kind = "native"
-
-[linux]
-# 原生驱动没有 Linux 移植层;此段留空。

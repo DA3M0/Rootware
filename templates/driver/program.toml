@@ -1,0 +1,9 @@
+[program]
+name = "{{project_name}}"
+kind = "driver"          # RKM 驱动;entry = "rust"(SDK 注册)或 "c"(compat/linux shim)
+entry = "rust"
+version = "0.1.0"
+
+[linux]
+# entry = "c" 的 Linux 兼容驱动在此声明 C 源:source = ["src/driver.c"],
+# 并把 entry 改为 "c" —— 参考 user/zero-driver。

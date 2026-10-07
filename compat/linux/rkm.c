@@ -2,7 +2,7 @@
 
 #include "rkm.h"
 
-/* 名字与版本来自 rkm.toml,由 build.sh 以 -D 注入,清单是唯一来源。 */
+/* 名字与版本来自 program.toml 清单,由构建系统以 -D 注入,清单是唯一来源。 */
 #ifndef RKM_MODULE_NAME
 #define RKM_MODULE_NAME "unnamed"
 #endif

@@ -1,0 +1,5 @@
+[program]
+name = "libcrc"
+kind = "lib"             # 静态库组件:产物 lib<name>.a,不进 ISO、不参与启动
+entry = "c"              # 源为 C;被其他组件经 [link] libs 引用
+version = "0.1.0"

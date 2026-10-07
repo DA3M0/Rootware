@@ -4,7 +4,7 @@ version = "1.0.0"
 edition = "2024"
 
 [dependencies]
-librootware = { path = "../../sdk/librootware", default-features = false }
+librootware = { path = "../../sdk/librootware", default-features = false, features = ["crt0"] }
 
 # Standalone workspace: user programs build against the SDK by path,
 # outside the kernel workspace.

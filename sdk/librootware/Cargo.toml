@@ -9,8 +9,11 @@ license = "Apache-2.0"
 rootware-abi = { path = "../../abi" }
 
 [features]
-default = ["std"]
+default = ["std", "crt0"]
 std = []
+# crt0:入口 shim(_start → rootware_main)。entry = "c" 的混合程序把
+# Rust 部分构建成 staticlib 时要关掉它,避免与 C 侧入口重复定义。
+crt0 = []
 
 [lib]
 path = "src/lib.rs"

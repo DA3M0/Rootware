@@ -27,6 +27,10 @@ jobs:
       - name: Install boot toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y nasm grub-pc-bin mtools xorriso qemu-system-x86
+          sudo apt-get install -y nasm grub-pc-bin mtools xorriso qemu-system-x86 g++
+      # Zig 用于多语言组件(mixed-demo 的 zig/ 目录);版本与本机开发保持一致。
+      - uses: mlugg/setup-zig@v1
+        with:
+          version: 0.16.0
       - name: Stability gate (selftests + user-space round trip)
         run: ./run-tests.sh

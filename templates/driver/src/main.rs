@@ -1,7 +1,7 @@
 //! RKM 驱动骨架。
 //!
-//! Rootware 构建(--no-default-features):no_std,经内核注册。
-//! 主机模拟(host-sim,默认):std,用内存能力表跑同一套逻辑。
+//! Rootware 构建(默认,./build.sh driver):no_std,经内核注册。
+//! 主机模拟(--features host-sim):std,用内存能力表跑同一套逻辑。
 
 #![cfg_attr(not(feature = "host-sim"), no_std)]
 #![cfg_attr(not(feature = "host-sim"), no_main)]

@@ -1,0 +1,8 @@
+[program]
+name = "zero-driver"
+kind = "driver"          # RKM 驱动:注册语义 + name/version 注入
+entry = "c"              # C 主导链接(compat/linux shim 提供 _start)
+version = "0.1.0"
+
+[c]
+sources = ["src/*.c"]

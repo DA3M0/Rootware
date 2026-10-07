@@ -1,0 +1,7 @@
+[program]
+name = "mixed-demo"
+kind = "program"
+entry = "rust"           # Rust 主导链接;非 Rust 源来自 c/ cpp/ zig/ 约定目录
+
+[link]
+libs = ["libcrc"]        # C 静态库组件(crc32)

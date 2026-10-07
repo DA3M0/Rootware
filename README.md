@@ -43,7 +43,9 @@ Rootware has three layers:
 
 ### Userspace (boot modules)
 
-`user/` ships example programs built as static ELF64 binaries loaded by the kernel's ELF loader: `hello` (console), `echo-service` (IPC service, pid 2), `ipc-client` (handshake + capability + echo round trip + RKM driver read, pid 1), `rkm-driver` (native RKM counter device), and `zero-driver` (a Linux-compatible C driver ported from `/dev/zero`, compiled through `compat/linux`). Around 4,900 lines of Rust plus a small C shim in total, zero third-party dependencies.
+`user/` ships example components built as static ELF64 binaries loaded by the kernel's ELF loader: `hello` (console), `echo-service` (IPC service, pid 2), `ipc-client` (handshake + capability + echo round trip + RKM driver read, pid 1), `rkm-driver` (native RKM counter device), `zero-driver` (a Linux-compatible C driver ported from `/dev/zero`), `mixed-demo` (one program statically linking Rust + C + C++ + Zig via the C ABI), and `libcrc` (a `lib`-kind component consumed through `[link] libs`).
+
+The build system discovers every `user/*` component automatically (manifest `program.toml` optional for pure-Rust crates), supports the kinds `program` / `service` / `driver` / `lib`, and the kernel auto-spawns all boot modules (pinned: client pid 1, echo pid 2) — adding a component is one `./build.sh new <kind> <name>` away.
 
 The larger userspace components (filesystem, shell, coreutils) remain community-reuse plans for after 1.0; drivers now have a real framework (RKM) to land in.
 
@@ -52,6 +54,7 @@ The larger userspace components (filesystem, shell, coreutils) remain community-
 ### Dependencies
 
 - Rust stable (rustup toolchain; the bare-metal target: `rustup target add x86_64-unknown-none`)
+- `cc` (gcc), `g++` and `zig` for the multi-language components
 - QEMU
 - GRUB2 tools (`grub2-mkrescue`)
 - NASM
@@ -59,8 +62,10 @@ The larger userspace components (filesystem, shell, coreutils) remain community-
 ### Commands
 
 ```sh
-cargo test --workspace   # host unit tests (kernel logic + SDK + simulator)
-./build.sh               # build kernel + user programs, create rootware.iso, boot QEMU
+./build.sh               # discover user/ components, build kernel + programs (Rust/C/C++/Zig), create rootware.iso, boot QEMU
+./build.sh list          # show discovered components (kind / entry / languages)
+./build.sh new <kind> <name>   # instantiate a new program|service|driver|lib from templates
+./build.sh build|iso|run|test|clean
 ./run-tests.sh           # full stability gate: host tests + QEMU selftest + end-to-end IPC
 ```
 

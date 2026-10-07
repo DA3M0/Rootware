@@ -1,0 +1,5 @@
+[program]
+name = "{{project_name}}"
+kind = "lib"             # 静态库组件:产物 lib<name>.a,供其他组件 [link] libs 引用
+entry = "c"
+version = "0.1.0"

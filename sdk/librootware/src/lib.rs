@@ -28,8 +28,10 @@ pub use sys::{check_abi_version, kernel_abi_version};
 // Program entry shim: the kernel loads static ELF64 executables and
 // enters them at `_start` with the user stack pointer set. The shim
 // aligns the stack, calls the program's `rootware_main`, and exits with
-// its return code when it ever returns.
-#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+// its return code when it ever returns. Gated behind the `crt0`
+// feature so entry = "c" mixed programs (staticlib Rust parts) can
+// omit it and let the C side own `_start`.
+#[cfg(all(target_os = "none", target_arch = "x86_64", feature = "crt0"))]
 core::arch::global_asm! {
     ".section .text._start",
     ".global _start",
@@ -47,7 +49,7 @@ core::arch::global_asm! {
 
 // The symbol crt0 calls; declared to pin its type. The declaration
 // itself is only referenced from the entry shim above.
-#[cfg(all(target_os = "none", target_arch = "x86_64"))]
+#[cfg(all(target_os = "none", target_arch = "x86_64", feature = "crt0"))]
 unsafe extern "C" {
     #[allow(dead_code)]
     fn rootware_main() -> i32;
