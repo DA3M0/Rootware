@@ -13,6 +13,7 @@ extern crate alloc;
 mod gdt;
 mod capability;
 mod audit;
+mod console;
 mod elf;
 mod heap;
 mod idt;

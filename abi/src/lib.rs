@@ -1,4 +1,4 @@
-//! Rootware 1.0 frozen ABI (version 4).
+//! Rootware 1.x frozen ABI (version 5).
 //!
 //! This crate is the single source of truth for every stable interface
 //! between the Rootware kernel and user programs:
@@ -27,8 +27,9 @@ pub use error::ErrorCode;
 pub use ipc::{Message, RouteRule, message_type};
 pub use rkm::{RkmModule, module_kind, module_state};
 
-/// ABI version frozen for the Rootware 1.0 release.
-pub const ABI_VERSION: u32 = 4;
+/// ABI version. 4 was frozen for the 1.0 release; 5 adds
+/// `SYS_CONSOLE_READ` (console input) as an append-only extension.
+pub const ABI_VERSION: u32 = 5;
 
 #[cfg(test)]
 mod tests {
@@ -36,8 +37,8 @@ mod tests {
     use core::mem::size_of;
 
     #[test]
-    fn abi_version_is_frozen_at_four() {
-        assert_eq!(ABI_VERSION, 4);
+    fn abi_version_matches_five() {
+        assert_eq!(ABI_VERSION, 5);
     }
 
     #[test]
@@ -77,6 +78,7 @@ mod tests {
         assert_eq!(SYS_CAP_REQUEST, 8);
         assert_eq!(SYS_MODULE_REGISTER, 9);
         assert_eq!(SYS_MODULE_LIST, 10);
+        assert_eq!(SYS_CONSOLE_READ, 11);
     }
 
     #[test]

@@ -198,6 +198,9 @@ extern "C" fn rootware_exception_dispatch(frame: *mut ExceptionFrame) {
     match frame.vector {
         32 => {
             crate::timer::tick();
+            // Drain the UART while interrupts are off: serial RX has no
+            // interrupt of its own, the shell waits on this poll.
+            crate::console::poll();
             crate::timer::send_eoi();
         }
         0..=31 => handle_exception(frame),

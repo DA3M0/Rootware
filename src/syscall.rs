@@ -1,4 +1,4 @@
-//! Kernel syscall dispatch (ABI v4).
+//! Kernel syscall dispatch (ABI v5).
 //!
 //! Runs on the current process's kernel stack inside its address space.
 //! Every user pointer is validated against the caller's address space
@@ -9,8 +9,8 @@ use core::mem::size_of;
 use rootware_abi::capability::capability_kind;
 use rootware_abi::rkm::RkmModule;
 use rootware_abi::syscall::{
-    SYS_CAP_REQUEST, SYS_CONSOLE_WRITE, SYS_EXIT, SYS_IPC_RECEIVE, SYS_IPC_REPLY, SYS_IPC_SEND,
-    SYS_MODULE_LIST, SYS_MODULE_REGISTER, SYS_SPAWN, SYS_VERSION,
+    SYS_CAP_REQUEST, SYS_CONSOLE_READ, SYS_CONSOLE_WRITE, SYS_EXIT, SYS_IPC_RECEIVE, SYS_IPC_REPLY,
+    SYS_IPC_SEND, SYS_MODULE_LIST, SYS_MODULE_REGISTER, SYS_SPAWN, SYS_VERSION,
 };
 use rootware_abi::{ErrorCode, Message};
 
@@ -87,6 +87,10 @@ pub fn dispatch(number: u64, first: u64, second: u64) -> i64 {
         SYS_VERSION => rootware_abi::ABI_VERSION as i64,
         SYS_CONSOLE_WRITE => match console_write(first, second) {
             Ok(()) => 0,
+            Err(code) => code.status(),
+        },
+        SYS_CONSOLE_READ => match console_read(first, second) {
+            Ok(count) => count,
             Err(code) => code.status(),
         },
         SYS_EXIT => crate::process::exit_current(first as i64),
@@ -167,6 +171,49 @@ fn console_write(ptr: u64, len: u64) -> Result<(), ErrorCode> {
             Err(code)
         }
     }
+}
+
+/// Blocking console read: waits for at least one byte in the kernel
+/// input ring, then copies as many bytes as are available (up to `len`)
+/// into caller memory. Every retry holds interrupts off while deciding
+/// between "byte ready" and "block", and the process is marked Blocked
+/// before IF is restored, so the timer poll can never slip between
+/// "ring empty" and "parked" and lose its wake-up.
+fn console_read(ptr: u64, len: u64) -> Result<i64, ErrorCode> {
+    if len == 0 || len > 512 || !vmem::is_user_accessible(ptr, len) {
+        return Err(ErrorCode::InvalidArgument);
+    }
+    let out = ptr as *mut u8;
+    let count = loop {
+        crate::console::disable_interrupts();
+        match crate::console::pop() {
+            Some(first) => {
+                let mut count = 0usize;
+                let mut byte = first;
+                loop {
+                    unsafe {
+                        out.add(count).write_volatile(byte);
+                    }
+                    count += 1;
+                    if count == len as usize {
+                        break;
+                    }
+                    match crate::console::pop() {
+                        Some(next) => byte = next,
+                        None => break,
+                    }
+                }
+                break count;
+            }
+            None => {
+                crate::process::block_current(crate::console::CONSOLE_WAIT);
+                // Resumed: schedule() re-enabled interrupts. Loop back
+                // and re-check the ring under cli.
+            }
+        }
+    };
+    crate::console::enable_interrupts();
+    Ok(count as i64)
 }
 
 fn spawn(name_ptr: u64, name_len: u64) -> Result<u16, ErrorCode> {

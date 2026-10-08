@@ -1,8 +1,9 @@
 # librootware API 参考
 
-- `rootware_abi::ABI_VERSION`：**ABI v4**（1.0 正式版冻结）。`Message` 为
+- `rootware_abi::ABI_VERSION`：**ABI v5**（v4 为 1.0 正式版冻结；v5 以纯追加
+  方式加入 `SYS_CONSOLE_READ`）。`Message` 为
   `#[repr(C)]`、44 字节；标准消息类型、能力令牌和广播接收方常量保持稳定。
-  1.0.x 只允许增量扩展；破坏性变更需要新的主版本。
+  1.x 只允许增量扩展；破坏性变更需要新的主版本。
 - `ipc::Message`：固定消息布局，包含发送方、接收方、类型、能力令牌和 32 字节
   payload。在内核与用户程序之间通过裸指针传递，字段顺序不可调整。
 - `ipc::Transport`：发送、接收、回复的传输抽象；`InMemoryTransport`
@@ -14,6 +15,13 @@
 - `console::write_str` / `console::write_bytes` / `console::write_args`：
   通过 `SYS_CONSOLE_WRITE` 输出到内核串口控制台，格式化不分配内存。
   `log::info!` / `log::warn!` 在 no_std 下也接同一个控制台。
+- `console::read_bytes` / `console::read_byte`：通过 `SYS_CONSOLE_READ`
+  从内核输入环形缓冲读取（无数据时阻塞当前进程；缓冲由 APIC 时钟中断
+  以 100Hz 轮询串口填充）。宿主/模拟器目标返回 `Unsupported`。
+- `console::read_line(&mut [u8])`：带回显与行编辑的整行读取——可见字符
+  回显追加、退格擦除（`\x08 \x08`）、CR/LF 结束行、ESC 开头的终端序列
+  （方向键）整段吞掉；缓冲写满即提前结束。返回不含结束符的行长度，
+  缓冲不以 NUL 结尾。
 - `sys::kernel_abi_version` / `sys::check_abi_version`：运行时版本握手，
   程序启动时应先校验内核 ABI 与 SDK 一致。
 - `process::exit(code)`：终止当前进程；`process::spawn(name)`：按名称加载
@@ -47,7 +55,7 @@
 - 内核侧 `PermissionRule` / `PermissionConfig` / `RouteConfig` / `AuditEntry`
   是内核内部策略结构，不属于用户 SDK。
 
-## 冻结的 syscall 表（ABI v4）
+## 冻结的 syscall 表（ABI v5）
 
 | 号 | 名称 | rdi | rsi | 返回 |
 |---|------|-----|-----|------|
@@ -61,6 +69,7 @@
 | 8 | CAP_REQUEST | 能力 kind | — | 0 或 `PermissionDenied` |
 | 9 | MODULE_REGISTER | `*mut RkmModule`（in/out） | — | 0 或错误码 |
 | 10 | MODULE_LIST | `*mut RkmModule` 输出数组 | 数组容量（条目） | 注册总数（正数）或错误码 |
+| 11 | CONSOLE_READ | `*mut u8` 输出缓冲 | 缓冲容量（字节） | 实读字节数（≥1，无数据阻塞）或 `InvalidArgument` |
 
 `RkmModule` 是冻结的 32 字节描述符（`rkm::RkmModule`）：调用者填
 `name`（≤16 字节）、`version`（≤8 字节）、`kind`（`NATIVE=1` /

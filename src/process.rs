@@ -281,6 +281,18 @@ pub fn wake_receiver(receiver: u16) {
     }
 }
 
+/// True when any process is blocked waiting on `receiver`. The scheduler
+/// uses this for the console sentinel to decide between hlt-idling with
+/// the machine alive and running the power-off path.
+pub fn waiter_for(receiver: u16) -> bool {
+    unsafe {
+        let table = &raw const PROCESSES;
+        (*table)
+            .iter()
+            .any(|p| p.state == State::Blocked && p.waiting_for == receiver)
+    }
+}
+
 /// Terminate the current process, freeing its address space.
 pub fn exit_current(code: i64) -> ! {
     unsafe {
@@ -321,38 +333,51 @@ fn pick_ready() -> Option<usize> {
 /// again; from the boot context it returns only via `unreachable` paths.
 pub fn schedule() {
     let current = unsafe { CURRENT };
-    match pick_ready() {
-        Some(slot) => {
-            #[cfg(target_os = "none")]
-            crate::serial_println!(
-                "[DBG] switch {:+?} -> slot {} (pid {}, user {})",
-                current,
-                slot,
-                unsafe { (*(&raw const PROCESSES))[slot].id },
-                unsafe { (*(&raw const PROCESSES))[slot].is_user }
-            );
-            unsafe {
-                CURSOR = slot as isize;
-                CURRENT = slot as isize;
-                let next = &raw mut PROCESSES[slot];
-                if (*next).is_user {
-                    gdt_stack_for(slot);
-                    vmem::switch_to(&(*next).space);
-                } else {
-                    vmem::switch_to_kernel();
+    loop {
+        match pick_ready() {
+            Some(slot) => {
+                #[cfg(target_os = "none")]
+                crate::serial_println!(
+                    "[DBG] switch {:+?} -> slot {} (pid {}, user {})",
+                    current,
+                    slot,
+                    unsafe { (*(&raw const PROCESSES))[slot].id },
+                    unsafe { (*(&raw const PROCESSES))[slot].is_user }
+                );
+                unsafe {
+                    CURSOR = slot as isize;
+                    CURRENT = slot as isize;
+                    let next = &raw mut PROCESSES[slot];
+                    if (*next).is_user {
+                        gdt_stack_for(slot);
+                        vmem::switch_to(&(*next).space);
+                    } else {
+                        vmem::switch_to_kernel();
+                    }
+                    // Interrupts stay on across switches: every kernel context
+                    // expects them enabled.
+                    core::arch::asm!("sti", options(nostack, preserves_flags));
+                    let old_context = if current >= 0 {
+                        &raw mut PROCESSES[current as usize].context
+                    } else {
+                        &raw mut BOOT_CONTEXT
+                    };
+                    rootware_context_switch(old_context, &raw const (*next).context);
                 }
-                // Interrupts stay on across switches: every kernel context
-                // expects them enabled.
-                core::arch::asm!("sti", options(nostack, preserves_flags));
-                let old_context = if current >= 0 {
-                    &raw mut PROCESSES[current as usize].context
-                } else {
-                    &raw mut BOOT_CONTEXT
-                };
-                rootware_context_switch(old_context, &raw const (*next).context);
+                return;
+            }
+            None => {
+                if crate::console::waiter_present() {
+                    // A shell is parked on console input: keep the machine
+                    // alive. The timer poll wakes the waiter, then we re-pick.
+                    unsafe {
+                        core::arch::asm!("sti; hlt", options(nostack));
+                    }
+                    continue;
+                }
+                idle(); // -> !
             }
         }
-        None => idle(),
     }
 }
 

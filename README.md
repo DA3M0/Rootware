@@ -43,11 +43,11 @@ Rootware has three layers:
 
 ### Userspace (boot modules)
 
-`user/` ships example components built as static ELF64 binaries loaded by the kernel's ELF loader: `hello` (console), `echo-service` (IPC service, pid 2), `ipc-client` (handshake + capability + echo round trip + RKM driver read, pid 1), `rkm-driver` (native RKM counter device), `zero-driver` (a Linux-compatible C driver ported from `/dev/zero`), `mixed-demo` (one program statically linking Rust + C + C++ + Zig via the C ABI), and `libcrc` (a `lib`-kind component consumed through `[link] libs`).
+`user/` ships example components built as static ELF64 binaries loaded by the kernel's ELF loader: `hello` (console), `echo-service` (IPC service, pid 2), `ipc-client` (handshake + capability + echo round trip + RKM driver read, pid 1), `rkm-driver` (native RKM counter device), `zero-driver` (a Linux-compatible C driver ported from `/dev/zero`), `mixed-demo` (one program statically linking Rust + C + C++ + Zig via the C ABI), and `libcrc` (a `lib`-kind component consumed through `[link] libs`). `shell` is the interactive serial console (`rootware> ` prompt, line editing, `help`/`echo`/`clear`/`abi`/`modules`/`run`/`exit`) reading through the kernel's console-input syscall.
 
 The build system discovers every `user/*` component automatically (manifest `program.toml` optional for pure-Rust crates), supports the kinds `program` / `service` / `driver` / `lib`, and the kernel auto-spawns all boot modules (pinned: client pid 1, echo pid 2) — adding a component is one `./build.sh new <kind> <name>` away.
 
-The larger userspace components (filesystem, shell, coreutils) remain community-reuse plans for after 1.0; drivers now have a real framework (RKM) to land in.
+Console input is provided by `SYS_CONSOLE_READ` (ABI v5): the APIC timer polls the UART at 100 Hz into a kernel ring buffer and wakes the process blocked on the read. The larger userspace components (filesystem, coreutils) remain community-reuse plans; drivers now have a real framework (RKM) to land in.
 
 ## Build & Run
 

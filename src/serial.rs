@@ -28,6 +28,18 @@ impl SerialPort {
             outb(COM1, byte);
         }
     }
+
+    /// Reads one received byte, or `None` when the receive FIFO is empty.
+    /// The caller polls (through the timer tick); RX interrupts stay off.
+    pub fn read_byte(&self) -> Option<u8> {
+        unsafe {
+            if (inb(COM1 + 5) & 0x01) == 0 {
+                None
+            } else {
+                Some(inb(COM1))
+            }
+        }
+    }
 }
 
 impl fmt::Write for SerialPort {
@@ -71,6 +83,12 @@ pub fn _print(args: core::fmt::Arguments) {
 pub fn write_byte(byte: u8) {
     unsafe {
         (*&raw mut SERIAL).write_byte(byte);
+    }
+}
+
+pub fn read_byte() -> Option<u8> {
+    unsafe {
+        (*&raw mut SERIAL).read_byte()
     }
 }
 

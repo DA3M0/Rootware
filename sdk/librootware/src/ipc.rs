@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn abi_version_and_message_size_are_frozen() {
-        assert_eq!(rootware_abi::ABI_VERSION, 4);
+        assert_eq!(rootware_abi::ABI_VERSION, 5);
         assert_eq!(core::mem::size_of::<Message>(), 44);
     }
 }

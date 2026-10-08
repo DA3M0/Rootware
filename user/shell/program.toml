@@ -1,0 +1,4 @@
+[program]
+name = "shell"
+kind = "program"         # 普通用户程序;常驻服务用 kind = "service"
+entry = "rust"

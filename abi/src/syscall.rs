@@ -2,8 +2,9 @@
 //!
 //! Numbers 1–3 are unchanged since the Beta ABI. Numbers 4–8 were
 //! added for the 1.0 release and are frozen from now on. Numbers 9–10
-//! add the RKM driver framework; future growth appends new numbers and
-//! never reuses or reorders existing ones.
+//! add the RKM driver framework. Number 11 adds console input for the
+//! userspace shell; future growth appends new numbers and never reuses
+//! or reorders existing ones.
 
 pub const SYS_IPC_SEND: u64 = 1;
 pub const SYS_IPC_RECEIVE: u64 = 2;
@@ -15,6 +16,7 @@ pub const SYS_SPAWN: u64 = 7;
 pub const SYS_CAP_REQUEST: u64 = 8;
 pub const SYS_MODULE_REGISTER: u64 = 9;
 pub const SYS_MODULE_LIST: u64 = 10;
+pub const SYS_CONSOLE_READ: u64 = 11;
 
 // Calling conventions per syscall (frozen alongside the numbers):
 //
@@ -30,3 +32,4 @@ pub const SYS_MODULE_LIST: u64 = 10;
 // | 8      | CAP_REQUEST     | capability kind (`u32`)     | —                                    | 0 or `PermissionDenied`          |
 // | 9      | MODULE_REGISTER | `*mut RkmModule` (in/out)   | —                                    | 0 or `ErrorCode::status()`       |
 // | 10     | MODULE_LIST     | `*mut RkmModule` out array  | array capacity (entries)             | registered count or error        |
+// | 11     | CONSOLE_READ    | `*mut u8` out buffer        | buffer capacity in bytes             | bytes read (≥1, blocks until data) or `InvalidArgument` |

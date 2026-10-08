@@ -1,0 +1,12 @@
+[package]
+name = "shell"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# 模板按 user/<name>/ 的目录深度实例化;放在别处时请相应调整。
+librootware = { path = "../../sdk/librootware", default-features = false, features = ["crt0"] }
+
+# Standalone workspace: user programs build against the SDK by path,
+# outside the kernel workspace.
+[workspace]
