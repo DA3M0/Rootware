@@ -4,25 +4,25 @@ version = 4
 
 [[package]]
 name = "librootware"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "rootware-abi",
 ]
 
 [[package]]
 name = "rootware"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "rootware-abi",
 ]
 
 [[package]]
 name = "rootware-abi"
-version = "1.0.0"
+version = "2.0.0"
 
 [[package]]
 name = "rootware-simulator"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "librootware",
 ]

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rootware 1.x stability gate: host unit tests plus a QEMU boot that must
+# Rootware 2.x stability gate: host unit tests plus a QEMU boot that must
 # run the kernel selftest suite, the full user-space round trip, and the
 # interactive shell (driven over the serial pipe).
 set -e

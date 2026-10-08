@@ -1,9 +1,12 @@
 # librootware API 参考
 
-- `rootware_abi::ABI_VERSION`：**ABI v5**（v4 为 1.0 正式版冻结；v5 以纯追加
-  方式加入 `SYS_CONSOLE_READ`）。`Message` 为
+- `rootware_abi::ABI_VERSION`：**ABI v5**（2.0 起唯一受支持接口；v4 自 2.0 起
+  **废弃**——v5 是 v4 的纯超集，仅追加 `SYS_CONSOLE_READ`，1–10 号 syscall、
+  44 字节 `Message` 与全部错误码原样保留）。`Message` 为
   `#[repr(C)]`、44 字节；标准消息类型、能力令牌和广播接收方常量保持稳定。
-  1.x 只允许增量扩展；破坏性变更需要新的主版本。
+  2.x 只允许增量扩展（新 syscall 从 12 号起追加）；破坏性变更需要新的主版本。
+- `rootware_abi::ABI_COMPAT_MIN`：兼容窗口下界（当前为 4）。握手接受窗口内
+  任意内核版本，仅为 2.0 之前的存量二进制保留；废弃的 v4 会在 3.0 评估移除。
 - `ipc::Message`：固定消息布局，包含发送方、接收方、类型、能力令牌和 32 字节
   payload。在内核与用户程序之间通过裸指针传递，字段顺序不可调整。
 - `ipc::Transport`：发送、接收、回复的传输抽象；`InMemoryTransport`
@@ -23,7 +26,8 @@
   （方向键）整段吞掉；缓冲写满即提前结束。返回不含结束符的行长度，
   缓冲不以 NUL 结尾。
 - `sys::kernel_abi_version` / `sys::check_abi_version`：运行时版本握手，
-  程序启动时应先校验内核 ABI 与 SDK 一致。
+  程序启动时应先校验内核 ABI 落在兼容窗口 `[ABI_COMPAT_MIN, ABI_VERSION]`
+  内（窗口早于下界缺 syscall、晚于上界语义未知，均拒绝）。
 - `process::exit(code)`：终止当前进程；`process::spawn(name)`：按名称加载
   启动模块并返回新进程 id。
 - `capability::request_capability(kind)`：通过 `SYS_CAP_REQUEST` 向内核请求

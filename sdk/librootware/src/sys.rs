@@ -13,12 +13,32 @@ pub fn kernel_abi_version() -> Result<u32> {
     Ok(version as u32)
 }
 
-/// Verifies the running kernel matches this SDK's ABI version.
+/// Verifies the running kernel implements an ABI this SDK understands:
+/// anything inside the compatibility window `ABI_COMPAT_MIN ..
+/// ABI_VERSION` (both re-exported at the crate root). Kernels older
+/// than the window lack syscalls this SDK emits; kernels newer than it
+/// may carry semantics this SDK does not know. ABI v4 kernels are
+/// accepted but **deprecated** — new code targets v5, the only
+/// supported interface.
 pub fn check_abi_version() -> Result<()> {
     let kernel = kernel_abi_version()?;
-    if kernel == crate::ABI_VERSION {
+    if kernel >= crate::ABI_COMPAT_MIN && kernel <= crate::ABI_VERSION {
         Ok(())
     } else {
         Err(Error::new(crate::error::ErrorCode::Unsupported))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn handshake_accepts_the_whole_compat_window() {
+        let check = |kernel: u32| {
+            kernel >= crate::ABI_COMPAT_MIN && kernel <= crate::ABI_VERSION
+        };
+        assert!(check(4), "deprecated v4 kernels stay accepted");
+        assert!(check(5), "current v5 kernels accepted");
+        assert!(!check(3), "pre-window kernels rejected");
+        assert!(!check(6), "unknown newer kernels rejected");
     }
 }

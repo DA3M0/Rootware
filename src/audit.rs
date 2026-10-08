@@ -28,7 +28,8 @@ pub fn record(entry: AuditEntry) {
     }
 }
 
-/// Kernel-side query helper; a syscall exposing the log comes after 1.0.
+/// Kernel-side query helper; a syscall exposing the audit log is
+/// planned for the 2.1 series (see docs/路线图.md).
 #[allow(dead_code)]
 pub fn query_sender(sender: u16, output: &mut [AuditEntry; AUDIT_CAPACITY]) -> usize {
     unsafe {

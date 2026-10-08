@@ -15,8 +15,13 @@ use librootware::sys;
 
 #[unsafe(no_mangle)]
 extern "C" fn rootware_main() -> i32 {
+    // Handshake over the compatibility window: deprecated v4 kernels
+    // still pass, v5 is the supported target.
     match sys::kernel_abi_version() {
-        Ok(version) if version == librootware::ABI_VERSION => {
+        Ok(version)
+            if version >= librootware::ABI_COMPAT_MIN
+                && version <= librootware::ABI_VERSION =>
+        {
             let _ = console::write_args(format_args!(
                 "client: kernel ABI v{} handshake ok\n",
                 version
@@ -24,8 +29,9 @@ extern "C" fn rootware_main() -> i32 {
         }
         Ok(version) => {
             let _ = console::write_args(format_args!(
-                "client: kernel ABI v{} but SDK expects v{}\n",
+                "client: kernel ABI v{} outside compat window [v{}, v{}]\n",
                 version,
+                librootware::ABI_COMPAT_MIN,
                 librootware::ABI_VERSION
             ));
             return 1;

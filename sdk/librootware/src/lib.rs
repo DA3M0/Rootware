@@ -18,7 +18,7 @@ pub mod sys;
 
 pub use error::{Error, Result};
 pub use ipc::{Message, Transport};
-pub use rootware_abi::{ABI_VERSION, ErrorCode, RkmModule};
+pub use rootware_abi::{ABI_COMPAT_MIN, ABI_VERSION, ErrorCode, RkmModule};
 pub use syscall::SyscallTransport;
 
 /// Runtime ABI handshake target: programs linked against this SDK expect

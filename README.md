@@ -18,7 +18,7 @@ I'm 15, and I've been learning Rust for about a week. I wanted to learn by build
 
 ## Status
 
-**1.0 — first stable release.** ABI v4 frozen; full process model with per-process address spaces; user programs loaded from boot modules and talking IPC end to end; stability gated by host unit tests plus an automated QEMU boot selftest (`run-tests.sh`).
+**2.0 — interactive era begins.** ABI v5 (v4 deprecated, compatibility window kept for pre-2.0 binaries); console input reaches the kernel and the first interactive shell ships; full process model with per-process address spaces; user programs loaded from boot modules and talking IPC end to end; stability gated by host unit tests plus an automated QEMU boot that drives the shell (`run-tests.sh`). The 2.1/2.2 series plans — process manager, kernel architecture work, interactive-system rollout, filesystem in the last 2.2 minor — live in [docs/路线图.md](docs/路线图.md).
 
 ## Architecture
 
@@ -30,14 +30,14 @@ Rootware has three layers:
 - Virtual memory: 4-level paging, one address space per process (user region at 0x40000000), CR3 switching, full-RAM identity map for the kernel
 - Physical memory: bitmap frame allocator over the Multiboot2 memory map, plus a kernel heap (`alloc` collections)
 - IPC: per-receiver bounded queues, typed routing, capability checks, audit log; sender identity is kernel-owned
-- Syscalls (ABI v4, frozen): IPC send/receive/reply, version handshake, console write, exit, spawn, capability request, RKM module register/list — entered through `syscall`/`sysret` with per-process kernel stacks and validated user pointers
+- Syscalls (ABI v5, append-only since v4): IPC send/receive/reply, version handshake, console write/read, exit, spawn, capability request, RKM module register/list — entered through `syscall`/`sysret` with per-process kernel stacks and validated user pointers. Console input is a timer-polled UART ring buffer; the scheduler hlt-idles instead of powering off while a shell waits
 - RKM driver framework: user-space drivers register into a kernel registry (native Rust via the SDK, or Linux-style C drivers via the compat shim); registration grants the IPC send capability and opens the driver's client lanes
 - Interrupts: full exception frames, kernel GDT + TSS (RSP0, IST), Ring 3 faults kill the offending process instead of halting the machine
 
 ### SDK (`librootware`, Apache 2.0)
 
 - `Transport` abstraction with a syscall-backed implementation and an in-memory test double
-- Console output, process spawn/exit, capability requests, runtime ABI handshake
+- Console output and line-edited input (`read_line` with echo, backspace, escape-sequence swallowing), process spawn/exit, capability requests, runtime ABI handshake over the v4–v5 compatibility window
 - RKM driver support: `rkm::register`/`rkm::list`, a `Driver` trait mirroring `Service`
 - `Service` lifecycle framework; no_std mode ships crt0 and a panic handler
 
@@ -47,7 +47,7 @@ Rootware has three layers:
 
 The build system discovers every `user/*` component automatically (manifest `program.toml` optional for pure-Rust crates), supports the kinds `program` / `service` / `driver` / `lib`, and the kernel auto-spawns all boot modules (pinned: client pid 1, echo pid 2) — adding a component is one `./build.sh new <kind> <name>` away.
 
-Console input is provided by `SYS_CONSOLE_READ` (ABI v5): the APIC timer polls the UART at 100 Hz into a kernel ring buffer and wakes the process blocked on the read. The larger userspace components (filesystem, coreutils) remain community-reuse plans; drivers now have a real framework (RKM) to land in.
+Console input is provided by `SYS_CONSOLE_READ` (ABI v5): the APIC timer polls the UART at 100 Hz into a kernel ring buffer and wakes the process blocked on the read. ABI v4 is deprecated since 2.0 — the handshake window `[ABI_COMPAT_MIN, ABI_VERSION]` keeps pre-2.0 binaries running, while all new code targets v5. The larger userspace components (filesystem, coreutils) are scheduled for the 2.2 series (see docs/路线图.md); drivers have a real framework (RKM) to land in.
 
 ## Build & Run
 

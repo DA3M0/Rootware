@@ -21,13 +21,16 @@ const MAX_MODULES: usize = 8;
 extern "C" fn rootware_main() -> i32 {
     let _ = console::write_str("\n");
     let _ = console::write_str("Rootware shell v0.1.0\n");
+    // Handshake over the compatibility window; deprecated v4 kernels
+    // still pass, v5 is the supported target.
     match sys::kernel_abi_version() {
-        Ok(version) if version == librootware::ABI_VERSION => {}
+        Ok(version)
+            if version >= librootware::ABI_COMPAT_MIN
+                && version <= librootware::ABI_VERSION => {}
         Ok(version) => {
             let _ = console::write_args(format_args!(
-                "shell: kernel ABI v{} but SDK expects v{}, continuing anyway\n",
-                version,
-                librootware::ABI_VERSION
+                "shell: kernel ABI v{} outside compat window, continuing anyway\n",
+                version
             ));
         }
         Err(_) => {
@@ -105,13 +108,17 @@ fn echo(args: &[u8]) {
 
 fn abi_cmd() {
     match sys::kernel_abi_version() {
-        Ok(version) if version == librootware::ABI_VERSION => {
+        Ok(version)
+            if version >= librootware::ABI_COMPAT_MIN
+                && version <= librootware::ABI_VERSION =>
+        {
             let _ = console::write_args(format_args!("kernel ABI v{} handshake ok\n", version));
         }
         Ok(version) => {
             let _ = console::write_args(format_args!(
-                "kernel ABI v{} but shell expects v{}\n",
+                "kernel ABI v{} outside compat window [v{}, v{}]\n",
                 version,
+                librootware::ABI_COMPAT_MIN,
                 librootware::ABI_VERSION
             ));
         }

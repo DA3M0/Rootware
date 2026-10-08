@@ -34,7 +34,7 @@ pub trait Driver {
     fn stop(&mut self) {}
 }
 
-/// Registers the calling process as an RKM module (ABI v4
+/// Registers the calling process as an RKM module (ABI v5
 /// SYS_MODULE_REGISTER) and returns the descriptor as stored by the
 /// kernel, with `pid` and `state` filled in.
 pub fn register(name: &str, version: &str, kind: u8) -> Result<RkmModule> {
@@ -58,7 +58,7 @@ pub fn register(name: &str, version: &str, kind: u8) -> Result<RkmModule> {
     Ok(descriptor)
 }
 
-/// Copies the kernel's module registry into `buffer` (ABI v4
+/// Copies the kernel's module registry into `buffer` (ABI v5
 /// SYS_MODULE_LIST) and returns the total number of stored modules,
 /// which may exceed `buffer.len()`; call again with a bigger buffer to
 /// see the rest.
