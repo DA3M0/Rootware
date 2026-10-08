@@ -62,7 +62,7 @@ Console input is provided by `SYS_CONSOLE_READ` (ABI v5): the APIC timer polls t
 ### Commands
 
 ```sh
-./build.sh               # discover user/ components, build kernel + programs (Rust/C/C++/Zig), create rootware.iso, boot QEMU
+./build.sh               # discover user/ components, build kernel + programs (Rust/C/C++/Zig), create rootware.iso, boot QEMU in a window (interactive console: View -> serial0 / Ctrl-Alt-3)
 ./build.sh list          # show discovered components (kind / entry / languages)
 ./build.sh new <kind> <name>   # instantiate a new program|service|driver|lib from templates
 ./build.sh build|iso|run|test|clean

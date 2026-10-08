@@ -3,7 +3,8 @@
 # 多语言(Rust/C/C++/Zig)静态编译链接为启动模块,并驱动各种构建目标。
 #
 # 用法: ./build.sh [命令]
-#   (默认)            全流程:构建内核 + 全部组件 + ISO + QEMU 运行
+#   (默认)            全流程:构建内核 + 全部组件 + ISO + QEMU 窗口运行
+#                      (交互在 QEMU 窗口 serial0 控制台:View -> serial0 / Ctrl-Alt-3)
 #   build              构建内核与全部组件(含 ISO)
 #   program <名字>     构建单个组件(按清单 kind 分派)
 #   driver|service|lib <名字>
@@ -112,12 +113,13 @@ make_iso() {
 
 run_qemu() {
     [ -f rootware.iso ] || { echo "FAIL: rootware.iso 不存在,先 ./build.sh build" >&2; exit 1; }
-    echo "==> Running in QEMU..."
+    echo "==> Running in QEMU (graphical window)"
+    echo "    交互控制台: 窗口内 View -> serial0 / Ctrl-Alt-3(VGA 控制台在 2.2.3 上线)"
+    # 图形窗口启动,串口不再接管终端:默认路由到 QEMU 窗口内的
+    # serial0 虚拟控制台;稳定性门禁(run-tests.sh)自带无头参数,不受影响。
     qemu-system-x86_64 \
         -cdrom rootware.iso \
         -boot order=d,menu=off \
-        -serial stdio \
-        -display none \
         -m 128M
 }
 
